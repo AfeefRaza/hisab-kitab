@@ -59,7 +59,7 @@ begin
       join public.settlement_batches b on b.id = sl.batch_id
       where sl.tracking_number = s.tracking_number and b.voided_at is null and b.source = 'file');
 
-  update _api_src set net = round(cod - charges - tax, 2);
+  update _api_src set net = round(cod - charges - tax, 2) where true;  -- pg_safeupdate needs a WHERE
 
   insert into public.settlement_batches (courier, file_name, file_sha256, statement_ref, statement_date, source, note)
   select distinct on (cpr) 'postex', 'PostEx API', 'api:postex:' || cpr, cpr, cpr_date, 'api',

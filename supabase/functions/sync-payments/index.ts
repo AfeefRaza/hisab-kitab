@@ -93,24 +93,30 @@ Deno.serve(handle(async (req) => {
     return { id: r.id, financials: fin.get(r.tracking_number) ?? null, payment: p, complete, next_hours: p?.settle ? 24 : 12 };
   });
 
-  let applied = 0, built: unknown = null;
-  if (updates.length) {
-    const { data, error: e1 } = await db.rpc("apply_courier_payments", { p_rows: updates });
-    if (e1) throw new Error(`Saving payments failed: ${e1.message}`);
-    applied = data ?? 0;
+  let applied = 0, built: unknown = null, fatal: string | null = null;
+  try {
+    if (updates.length) {
+      const { data, error: e1 } = await db.rpc("apply_courier_payments", { p_rows: updates });
+      if (e1) throw new Error(`Saving payments failed: ${e1.message}`);
+      applied = data ?? 0;
+    }
+    // Always rebuild: idempotent, and recovers parcels saved by an earlier failed run
     const { data: b, error: e2 } = await db.rpc("build_api_settlements");
     if (e2) throw new Error(`Building settlements failed: ${e2.message}`);
     built = b;
     await db.rpc("auto_match_settlements");
     await db.rpc("refresh_alerts");
+  } catch (e) {
+    fatal = e instanceof Error ? e.message : String(e);
   }
 
   const stats = { checked: rows.length, applied, settled, errors, built };
   await db.from("sync_runs").update({
     finished_at: new Date().toISOString(),
-    status: errors === 0 ? "ok" : (errors < rows.length ? "partial" : "error"),
+    status: fatal ? "error" : (errors === 0 ? "ok" : (errors < rows.length ? "partial" : "error")),
     stats,
-    error: errors ? `${errors} payment lookups failed` : null,
+    error: fatal ?? (errors ? `${errors} payment lookups failed` : null),
   }).eq("id", run?.id);
+  if (fatal) return json(req, { ...stats, error: fatal }, 500);
   return json(req, stats);
 }));
