@@ -220,12 +220,12 @@ class _TransactionsViewState extends State<_TransactionsView> {
               onTap: AppState.session.canOperate ? (t) => _actions(context, t) : null,
               empty: const EmptyState(icon: Icons.account_balance, title: 'No bank transactions in this period', message: 'Import a statement to start reconciling.'),
               columns: [
-                Col('Date', (t) => Text(dateShort(t['txn_date']))),
-                Col('Description', (t) => SizedBox(width: 320, child: Text('${t['description']}', maxLines: 2, overflow: TextOverflow.ellipsis))),
-                Col('Reference', (t) => Text('${t['reference'] ?? ''}')),
-                Col('In', (t) => toNum(t['credit']) > 0 ? Amount(t['credit'], style: const TextStyle(color: Palette.positive)) : const Text(''), numeric: true),
-                Col('Out', (t) => toNum(t['debit']) > 0 ? Amount(t['debit']) : const Text(''), numeric: true),
-                Col('Balance', (t) => Amount(t['balance']), numeric: true),
+                Col('Date', (t) => Text(dateShort(t['txn_date'])), sort: 'txn_date'),
+                Col('Description', (t) => SizedBox(width: 320, child: Text('${t['description']}', maxLines: 2, overflow: TextOverflow.ellipsis)), sort: 'description'),
+                Col('Reference', (t) => CopyText(t['reference'] as String?), sort: 'reference'),
+                Col('In', (t) => toNum(t['credit']) > 0 ? Amount(t['credit'], style: const TextStyle(color: Palette.positive)) : const Text(''), numeric: true, sort: 'credit'),
+                Col('Out', (t) => toNum(t['debit']) > 0 ? Amount(t['debit']) : const Text(''), numeric: true, sort: 'debit'),
+                Col('Balance', (t) => Amount(t['balance']), numeric: true, sort: 'balance'),
                 Col('Explained as', (t) {
                   final s = status(t);
                   return Pill(s, color: s == 'Unexplained' ? Palette.warning : Palette.positive);

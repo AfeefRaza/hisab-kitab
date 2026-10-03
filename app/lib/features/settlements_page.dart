@@ -102,17 +102,17 @@ class _BatchesList extends StatelessWidget {
                     'For other couriers, import the COD payment files they send (xlsx, csv or their .xls export).',
               ),
               columns: [
-                Col('Courier', (r) => Text(courierName(r['courier']), style: const TextStyle(fontWeight: FontWeight.w700))),
+                Col('Courier', (r) => Text(courierName(r['courier']), style: const TextStyle(fontWeight: FontWeight.w700)), sort: 'courier'),
                 Col('Statement', (r) => Row(mainAxisSize: MainAxisSize.min, children: [
                       Text('${r['statement_ref'] ?? r['file_name']}'),
                       if (r['source'] == 'api') ...[const SizedBox(width: 6), const Pill('API', color: Palette.info)],
-                    ])),
-                Col('Date', (r) => Text(dateShort(r['statement_date']))),
-                Col('Parcels', (r) => Text(count(r['row_count'])), numeric: true),
-                Col('COD', (r) => Amount(r['total_cod']), numeric: true),
-                Col('Charges', (r) => Amount(r['total_charges']), numeric: true),
-                Col('Net', (r) => Amount(r['total_net'], bold: true), numeric: true),
-                Col('Bank', (r) => _bankPill(r)),
+                    ]), sort: 'statement_ref'),
+                Col('Date', (r) => Text(dateShort(r['statement_date'])), sort: 'statement_date'),
+                Col('Parcels', (r) => Text(count(r['row_count'])), numeric: true, sort: 'row_count'),
+                Col('COD', (r) => Amount(r['total_cod']), numeric: true, sort: 'total_cod'),
+                Col('Charges', (r) => Amount(r['total_charges']), numeric: true, sort: 'total_charges'),
+                Col('Net', (r) => Amount(r['total_net'], bold: true), numeric: true, sort: 'total_net'),
+                Col('Bank', (r) => _bankPill(r), sort: 'is_banked'),
               ],
               tile: (r) => ListTile(
                 title: Text('${courierName(r['courier'])} · ${r['statement_ref'] ?? r['file_name']}'),
@@ -174,11 +174,11 @@ class _UnsettledView extends StatelessWidget {
                     ],
                     onTap: (r) => context.go('/orders?state=with_courier&courier=${r['courier']}'),
                     columns: [
-                      Col('Courier', (r) => Text(courierName(r['courier']), style: const TextStyle(fontWeight: FontWeight.w700))),
-                      Col('Parcels', (r) => Text(count(r['n'])), numeric: true),
+                      Col('Courier', (r) => Text(courierName(r['courier']), style: const TextStyle(fontWeight: FontWeight.w700)), sort: 'courier'),
+                      Col('Parcels', (r) => Text(count(r['n'])), numeric: true, sort: 'n'),
                       for (final b in buckets)
                         Col(b.$3, (r) => Amount(r[b.$3], style: TextStyle(color: b.$1 > 14 && toNum(r[b.$3]) > 0 ? Palette.negative : null)), numeric: true),
-                      Col('Total', (r) => Amount(r['total'], bold: true), numeric: true),
+                      Col('Total', (r) => Amount(r['total'], bold: true), numeric: true, sort: 'total'),
                     ],
                     tile: (r) => ListTile(
                       title: Text(courierName(r['courier'])),
@@ -470,13 +470,13 @@ class SettlementBatchPage extends StatelessWidget {
                   if (o != null) context.go('/orders/${o['order_id']}');
                 },
                 columns: [
-                  Col('Tracking', (l) => Text('${l['tracking_number']}')),
+                  Col('Tracking', (l) => CopyText('${l['tracking_number']}'), sort: 'tracking_number'),
                   Col('Order', (l) {
                     final o = orders[l['tracking_number']];
                     return o == null ? const Pill('Unknown', color: Palette.negative) : Text('${o['name']}');
                   }),
-                  Col('Kind', (l) => Text('${l['line_kind']}')),
-                  Col('COD', (l) => Amount(l['cod_amount']), numeric: true),
+                  Col('Kind', (l) => Text('${l['line_kind']}'), sort: 'line_kind'),
+                  Col('COD', (l) => Amount(l['cod_amount']), numeric: true, sort: 'cod_amount'),
                   Col('Order total', (l) {
                     final o = orders[l['tracking_number']];
                     if (o == null) return const Text('—');
@@ -484,8 +484,8 @@ class SettlementBatchPage extends StatelessWidget {
                     return Text(rs(o['current_total']), style: TextStyle(color: l['line_kind'] == 'delivered' && diff.abs() > 1 ? Palette.negative : null));
                   }, numeric: true),
                   Col('Charges', (l) => Amount(toNum(l['courier_charges']) + toNum(l['other_deductions'])), numeric: true),
-                  Col('Net', (l) => Amount(l['net_amount'], bold: true), numeric: true),
-                  Col('Status', (l) => Text('${l['courier_status'] ?? ''}')),
+                  Col('Net', (l) => Amount(l['net_amount'], bold: true), numeric: true, sort: 'net_amount'),
+                  Col('Status', (l) => Text('${l['courier_status'] ?? ''}'), sort: 'courier_status'),
                 ],
                 tile: (l) {
                   final o = orders[l['tracking_number']];

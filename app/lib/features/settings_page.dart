@@ -439,8 +439,8 @@ class _SyncTab extends StatelessWidget {
           child: DataList(
             rows: runs,
             columns: [
-              Col('Started', (r) => Text(dateTime(r['started_at']))),
-              Col('Type', (r) => Text(titleCase('${r['kind']}'))),
+              Col('Started', (r) => Text(dateTime(r['started_at'])), sort: 'started_at'),
+              Col('Type', (r) => Text(titleCase('${r['kind']}')), sort: 'kind'),
               Col('Trigger', (r) => Text('${r['trigger']}')),
               Col('Status', (r) => Pill('${r['status']}', color: switch (r['status']) {
                     'ok' => Palette.positive,

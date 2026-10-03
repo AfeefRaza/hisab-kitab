@@ -23,7 +23,10 @@ class _OrdersPageState extends State<OrdersPage> {
   static const _pageSize = 50;
   late String? _state = widget.initialState;
   late String? _courier = widget.initialCourier;
+  String? _parcel;
+  bool? _cod;
   final _search = TextEditingController();
+  final _city = TextEditingController();
   Timer? _debounce;
   String _sort = 'created_at_shop';
   bool _asc = false;
@@ -45,21 +48,28 @@ class _OrdersPageState extends State<OrdersPage> {
   void dispose() {
     _debounce?.cancel();
     _search.dispose();
+    _city.dispose();
     super.dispose();
   }
 
-  Future<({List<Rec> rows, int total})> _load() {
+  bool get _hasFilters =>
+      _state != null || _courier != null || _parcel != null || _cod != null || _search.text.isNotEmpty || _city.text.isNotEmpty;
+
+  Future<({List<Rec> rows, int total})> _query({int page = 0, int pageSize = _pageSize}) {
     final p = AppState.period.value;
     return Api.instance.orders(
       from: p.start,
       to: p.end,
       moneyState: _state,
       courier: _courier,
+      shipmentStatus: _parcel,
+      isCod: _cod,
+      city: _city.text,
       search: _search.text,
       sort: _sort,
       ascending: _asc,
-      page: _page,
-      pageSize: _pageSize,
+      page: page,
+      pageSize: pageSize,
     );
   }
 
@@ -69,16 +79,20 @@ class _OrdersPageState extends State<OrdersPage> {
         _version++;
       });
 
+  void _typed() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () => _refilter(() {}));
+  }
+
   Future<void> _export() async {
     final p = AppState.period.value;
     final all = <Rec>[];
     for (var page = 0; page < 200; page++) {
-      final r = await Api.instance.orders(
-          from: p.start, to: p.end, moneyState: _state, courier: _courier, search: _search.text, page: page, pageSize: 1000);
+      final r = await _query(page: page, pageSize: 1000);
       all.addAll(r.rows);
       if (all.length >= r.total || r.rows.isEmpty) break;
     }
-    downloadCsv('orders-${ymd(p.start)}-to-${ymd(p.end)}.csv', [
+    await downloadCsv('orders-${ymd(p.start)}-to-${ymd(p.end)}.csv', [
       'Order', 'Date', 'Customer', 'Phone', 'City', 'COD', 'Courier', 'Tracking', 'Parcel status', 'Money state',
       'Order total', 'Settled COD', 'Courier cost', 'Courier cost source', 'Revenue', 'Contribution',
     ], [
@@ -96,7 +110,7 @@ class _OrdersPageState extends State<OrdersPage> {
   Widget build(BuildContext context) {
     return PageBody(
       title: 'Orders',
-      subtitle: 'Every order with its parcel status, money state and profit',
+      subtitle: 'Every order with its parcel status, money state and profit · click a column header to sort',
       actions: [
         OutlinedButton.icon(
           onPressed: () => runAction(context, _export, success: 'CSV downloaded'),
@@ -105,74 +119,88 @@ class _OrdersPageState extends State<OrdersPage> {
         ),
       ],
       children: [
-        Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          SizedBox(
-            width: 320,
-            child: TextField(
-              controller: _search,
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Order #, customer, phone, tracking, city'),
-              onChanged: (_) {
-                _debounce?.cancel();
-                _debounce = Timer(const Duration(milliseconds: 400), () => _refilter(() {}));
-              },
+        SectionCard(
+          padding: const EdgeInsets.all(12),
+          child: Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            SizedBox(
+              width: 300,
+              child: TextField(
+                controller: _search,
+                decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Order #, customer, phone, tracking'),
+                onChanged: (_) => _typed(),
+              ),
             ),
-          ),
-          DropdownMenu<String?>(
-            initialSelection: _state,
-            label: const Text('Money state'),
-            width: 230,
-            onSelected: (v) => _refilter(() => _state = v),
-            dropdownMenuEntries: [
-              const DropdownMenuEntry(value: null, label: 'All states'),
-              for (final s in MoneyState.flow) DropdownMenuEntry(value: s.key, label: s.label),
-            ],
-          ),
-          DropdownMenu<String?>(
-            initialSelection: _courier,
-            label: const Text('Courier'),
-            width: 170,
-            onSelected: (v) => _refilter(() => _courier = v),
-            dropdownMenuEntries: [
-              const DropdownMenuEntry(value: null, label: 'All couriers'),
-              for (final e in courierNames.entries.where((e) => e.key != 'other')) DropdownMenuEntry(value: e.key, label: e.value),
-            ],
-          ),
-          DropdownMenu<String>(
-            initialSelection: '$_sort|$_asc',
-            label: const Text('Sort'),
-            width: 210,
-            onSelected: (v) => _refilter(() {
-              final parts = v!.split('|');
-              _sort = parts[0];
-              _asc = parts[1] == 'true';
-            }),
-            dropdownMenuEntries: const [
-              DropdownMenuEntry(value: 'created_at_shop|false', label: 'Newest first'),
-              DropdownMenuEntry(value: 'created_at_shop|true', label: 'Oldest first'),
-              DropdownMenuEntry(value: 'current_total|false', label: 'Highest amount'),
-              DropdownMenuEntry(value: 'contribution|true', label: 'Lowest profit'),
-              DropdownMenuEntry(value: 'contribution|false', label: 'Highest profit'),
-              DropdownMenuEntry(value: 'status_at|true', label: 'Oldest status update'),
-            ],
-          ),
-        ]),
+            SizedBox(
+              width: 160,
+              child: TextField(
+                controller: _city,
+                decoration: const InputDecoration(prefixIcon: Icon(Icons.location_city, size: 18), hintText: 'City'),
+                onChanged: (_) => _typed(),
+              ),
+            ),
+            FilterMenu<String>(
+              label: 'Money state',
+              value: _state,
+              items: {for (final s in MoneyState.flow) s.key: s.label},
+              onChanged: (v) => _refilter(() => _state = v),
+            ),
+            FilterMenu<String>(
+              label: 'Parcel status',
+              value: _parcel,
+              items: shipmentStatuses,
+              onChanged: (v) => _refilter(() => _parcel = v),
+            ),
+            FilterMenu<String>(
+              label: 'Courier',
+              value: _courier,
+              items: {for (final e in courierNames.entries.where((e) => e.key != 'other')) e.key: e.value},
+              onChanged: (v) => _refilter(() => _courier = v),
+            ),
+            FilterMenu<bool>(
+              label: 'Payment',
+              value: _cod,
+              items: const {true: 'Cash on delivery', false: 'Prepaid'},
+              onChanged: (v) => _refilter(() => _cod = v),
+            ),
+            if (_hasFilters)
+              TextButton.icon(
+                onPressed: () => _refilter(() {
+                  _state = _courier = _parcel = null;
+                  _cod = null;
+                  _search.clear();
+                  _city.clear();
+                }),
+                icon: const Icon(Icons.filter_alt_off),
+                label: const Text('Clear filters'),
+              ),
+          ]),
+        ),
         SectionCard(
           padding: const EdgeInsets.all(8),
           child: Loader<({List<Rec> rows, int total})>(
             key: ValueKey(_version),
-            load: _load,
+            load: () => _query(page: _page),
             builder: (context, res, _) {
               final pages = (res.total / _pageSize).ceil();
               return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 DataList(
                   rows: res.rows,
+                  sortField: _sort,
+                  sortAscending: _asc,
+                  onSort: (f, asc) => _refilter(() {
+                    _sort = f;
+                    _asc = asc;
+                  }),
                   onTap: (r) => context.go('/orders/${r['order_id']}'),
-                  empty: const EmptyState(icon: Icons.receipt_long_outlined, title: 'No orders match', message: 'Try another period or filter.'),
+                  empty: const EmptyState(icon: Icons.receipt_long_outlined, title: 'No orders match', message: 'Try another period or clear filters.'),
                   columns: [
-                    Col('Order', (r) => Text('${r['name']}', style: const TextStyle(fontWeight: FontWeight.w700))),
-                    Col('Date', (r) => Text(dateShort(r['created_at_shop']))),
-                    Col('Customer', (r) => Text('${r['customer_name'] ?? ''}\n${r['city'] ?? ''}', maxLines: 2)),
-                    Col('Courier', (r) => Text('${courierName(r['courier'])}\n${r['tracking_number'] ?? ''}', maxLines: 2)),
+                    Col('Order', (r) => CopyText('${r['name']}', style: const TextStyle(fontWeight: FontWeight.w700)), sort: 'name'),
+                    Col('Date', (r) => Text(dateShort(r['created_at_shop'])), sort: 'created_at_shop'),
+                    Col('Customer', (r) => Text('${r['customer_name'] ?? ''}\n${r['city'] ?? ''}', maxLines: 2), sort: 'city'),
+                    Col('Courier / tracking', (r) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(courierName(r['courier'])),
+                          if (r['tracking_number'] != null) CopyText('${r['tracking_number']}', style: const TextStyle(fontSize: 12)),
+                        ]), sort: 'courier'),
                     Col('Parcel', (r) => SizedBox(
                           width: 160,
                           child: Text(
@@ -180,14 +208,15 @@ class _OrdersPageState extends State<OrdersPage> {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        )),
-                    Col('Money', (r) => StateChip(r['money_state'])),
-                    Col('Amount', (r) => Amount(r['current_total']), numeric: true),
-                    Col('Profit', (r) => Amount(r['contribution'], colored: true), numeric: true),
+                        ), sort: 'status_at'),
+                    Col('Money', (r) => StateChip(r['money_state']), sort: 'money_state'),
+                    Col('Amount', (r) => Amount(r['current_total']), numeric: true, sort: 'current_total'),
+                    Col('Courier cost', (r) => Amount(r['courier_cost']), numeric: true, sort: 'courier_cost'),
+                    Col('Profit', (r) => Amount(r['contribution'], colored: true), numeric: true, sort: 'contribution'),
                   ],
                   tile: (r) => ListTile(
                     title: Row(children: [
-                      Text('${r['name']}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Flexible(child: CopyText('${r['name']}', style: const TextStyle(fontWeight: FontWeight.w700))),
                       const SizedBox(width: 8),
                       StateChip(r['money_state']),
                     ]),
@@ -206,6 +235,7 @@ class _OrdersPageState extends State<OrdersPage> {
                     child: Row(children: [
                       Expanded(child: Text('${count(res.total)} orders · page ${_page + 1} of $pages')),
                       IconButton(
+                        tooltip: 'Previous page',
                         onPressed: _page == 0 ? null : () => setState(() {
                           _page--;
                           _version++;
@@ -213,6 +243,7 @@ class _OrdersPageState extends State<OrdersPage> {
                         icon: const Icon(Icons.chevron_left),
                       ),
                       IconButton(
+                        tooltip: 'Next page',
                         onPressed: _page + 1 >= pages ? null : () => setState(() {
                           _page++;
                           _version++;

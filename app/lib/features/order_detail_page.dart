@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/format.dart';
@@ -55,6 +56,24 @@ class OrderDetailPage extends StatelessWidget {
             ],
           ],
           children: [
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final (label, value) in [
+                ('Order', o['name']),
+                ('Tracking', o['tracking_number']),
+                ('Phone', o['phone']),
+                ('Customer', o['customer_name']),
+              ])
+                if (value != null && '$value'.isNotEmpty)
+                  InputChip(
+                    avatar: const Icon(Icons.copy_rounded, size: 16),
+                    label: Text('$label: $value'),
+                    tooltip: 'Copy $label',
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: '$value'));
+                      if (context.mounted) showSnack(context, 'Copied $value');
+                    },
+                  ),
+            ]),
             if (state != null)
               Card(
                 color: state.color.withValues(alpha: 0.08),

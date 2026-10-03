@@ -57,19 +57,19 @@ class _ProfitPageState extends State<ProfitPage> {
                 onTap: _dim == 'courier' ? (r) => context.go('/orders?courier=${r['key']}') : null,
                 empty: const EmptyState(icon: Icons.insights_outlined, title: 'No orders in this period'),
                 columns: [
-                  Col(label, (r) => SizedBox(width: 220, child: Text(name(r), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)))),
-                  Col('Orders', (r) => Text(count(r['orders'])), numeric: true),
-                  Col('Delivered', (r) => Text(count(r['delivered'])), numeric: true),
-                  Col('Returned', (r) => Text(count(r['returned'])), numeric: true),
+                  Col(label, (r) => SizedBox(width: 220, child: Text(name(r), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))), sort: 'key'),
+                  Col('Orders', (r) => Text(count(r['orders'])), numeric: true, sort: 'orders'),
+                  Col('Delivered', (r) => Text(count(r['delivered'])), numeric: true, sort: 'delivered'),
+                  Col('Returned', (r) => Text(count(r['returned'])), numeric: true, sort: 'returned'),
                   Col('Delivery %', (r) {
                     final v = toNumOrNull(r['delivery_rate']);
                     return Text(pct(v), style: TextStyle(fontWeight: FontWeight.w700, color: v == null ? null : (v < 70 ? Palette.negative : (v < 85 ? Palette.warning : Palette.positive))));
-                  }, numeric: true),
-                  Col('Revenue', (r) => Amount(r['revenue']), numeric: true),
-                  Col('Courier cost', (r) => Amount(r['courier_cost']), numeric: true),
-                  Col('Contribution', (r) => Amount(r['contribution'], colored: true, bold: true), numeric: true),
+                  }, numeric: true, sort: 'delivery_rate'),
+                  Col('Revenue', (r) => Amount(r['revenue']), numeric: true, sort: 'revenue'),
+                  Col('Courier cost', (r) => Amount(r['courier_cost']), numeric: true, sort: 'courier_cost'),
+                  Col('Contribution', (r) => Amount(r['contribution'], colored: true, bold: true), numeric: true, sort: 'contribution'),
                   Col('Margin', (r) => Text(toNum(r['revenue']) == 0 ? '—' : pct(toNum(r['contribution']) / toNum(r['revenue']) * 100)), numeric: true),
-                  Col('Open COD', (r) => Amount(r['expected_open']), numeric: true),
+                  Col('Open COD', (r) => Amount(r['expected_open']), numeric: true, sort: 'expected_open'),
                 ],
                 tile: (r) => ListTile(
                   title: Text(name(r), maxLines: 2),

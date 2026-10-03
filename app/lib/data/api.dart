@@ -42,6 +42,9 @@ class Api {
     String? moneyState,
     String? courier,
     String? search,
+    String? shipmentStatus,
+    bool? isCod,
+    String? city,
     String sort = 'created_at_shop',
     bool ascending = false,
     int page = 0,
@@ -54,12 +57,17 @@ class Api {
     q = q.gte('order_date', ymd(from)).lte('order_date', ymd(to));
     if (moneyState != null) q = q.eq('money_state', moneyState);
     if (courier != null) q = q.eq('courier', courier);
+    if (shipmentStatus != null) q = q.eq('shipment_status', shipmentStatus);
+    if (isCod != null) q = q.eq('is_cod', isCod);
+    final c = city?.trim().replaceAll(RegExp(r'[,()%]'), ' ') ?? '';
+    if (c.isNotEmpty) q = q.ilike('city', '%$c%');
     final s = search?.trim().replaceAll(RegExp(r'[,()]'), ' ') ?? '';
     if (s.isNotEmpty) {
       q = q.or('name.ilike.%$s%,customer_name.ilike.%$s%,phone.ilike.%$s%,tracking_number.ilike.%$s%,city.ilike.%$s%');
     }
     final res = await q
-        .order(sort, ascending: ascending)
+        .order(sort, ascending: ascending, nullsFirst: false)
+        .order('order_id', ascending: false) // stable paging
         .range(page * pageSize, page * pageSize + pageSize - 1)
         .count(CountOption.exact);
     return (rows: _rows(res.data), total: res.count);
@@ -231,13 +239,38 @@ class Api {
     }
   }
 
-  Future<List<Rec>> expenses(DateTime from, DateTime to) async => _rows(await _db
-      .from('expenses')
+  /// Expenses that count towards the period: dated in it, or spread over a range overlapping it.
+  Future<List<Rec>> expenses(DateTime from, DateTime to) async {
+    final f = ymd(from), t = ymd(to);
+    final rows = _rows(await _db
+        .from('expenses')
+        .select('*, expense_categories(name,kind)')
+        .or('and(period_start.is.null,expense_date.gte.$f,expense_date.lte.$t),and(period_start.lte.$t,period_end.gte.$f)')
+        .order('expense_date', ascending: false)
+        .limit(2000));
+    return [
+      for (final r in rows)
+        {...r, 'category_name': r['expense_categories']?['name'], 'applies_from': r['period_start'] ?? r['expense_date']},
+    ];
+  }
+
+  Future<List<Rec>> recurringExpenses() async => _rows(await _db
+      .from('recurring_expenses')
       .select('*, expense_categories(name,kind)')
-      .gte('expense_date', ymd(from))
-      .lte('expense_date', ymd(to))
-      .order('expense_date', ascending: false)
-      .limit(2000));
+      .order('active', ascending: false)
+      .order('start_month'));
+
+  Future<void> saveRecurring(Rec data) async {
+    final id = data.remove('id');
+    if (id == null) {
+      await _db.from('recurring_expenses').insert({...data, 'created_by': _db.auth.currentUser?.id});
+    } else {
+      await _db.from('recurring_expenses').update(data).eq('id', id);
+    }
+    await _db.rpc('generate_recurring_expenses');
+  }
+
+  Future<void> deleteRecurring(int id) => _db.from('recurring_expenses').delete().eq('id', id);
 
   Future<void> saveExpense(Rec data) async {
     final id = data.remove('id');

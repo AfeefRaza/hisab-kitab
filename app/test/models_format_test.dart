@@ -1,6 +1,9 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hisab_kitab/core/state.dart';
+import 'package:hisab_kitab/ui/widgets.dart';
 import 'package:hisab_kitab/core/format.dart';
 import 'package:hisab_kitab/data/models.dart';
 import 'package:hisab_kitab/features/csv_export.dart';
@@ -28,6 +31,34 @@ void main() {
     expect(pct(null), '—');
     expect(pct(75), '75.0%');
     expect(titleCase('settled_unbanked'), 'Settled Unbanked');
+  });
+
+  test('table sorting compares numbers numerically, text case-insensitively, nulls last', () {
+    expect(compareValues(9, 10), lessThan(0));
+    expect(compareValues('9', '10'), lessThan(0)); // numeric strings from Postgres numerics
+    expect(compareValues('b', 'A'), greaterThan(0));
+    expect(compareValues('2026-09-01', '2026-10-01'), lessThan(0));
+    expect(compareValues(null, 1), greaterThan(0));
+    expect(compareValues(1, null), lessThan(0));
+  });
+
+  test('period: month list, labels and stepping', () {
+    final months = PeriodState.recentMonths(3);
+    final now = DateTime.now();
+    expect(months.first.start, DateTime(now.year, now.month, 1));
+    expect(months[1].end, DateTime(now.year, now.month, 0)); // last day of previous month
+    expect(PeriodState.monthLabel(DateTime(2026, 8, 1)), 'Aug 2026');
+    expect(PeriodState.rangeText(DateTimeRange(start: DateTime(2026, 8, 1), end: DateTime(2026, 8, 31))), '1 Aug – 31 Aug 2026');
+
+    final p = PeriodState()..set(DateTimeRange(start: DateTime(2026, 8, 1), end: DateTime(2026, 8, 31)), 'Aug 2026');
+    p.shift(-1);
+    expect(p.value.start, DateTime(2026, 7, 1));
+    expect(p.value.end, DateTime(2026, 7, 31));
+    expect(p.label, 'Jul 2026');
+    p.set(DateTimeRange(start: DateTime(2026, 7, 10), end: DateTime(2026, 7, 16)), 'Custom'); // 7-day range
+    p.shift(-1);
+    expect(p.value.start, DateTime(2026, 7, 3));
+    expect(p.value.end, DateTime(2026, 7, 9));
   });
 
   test('CSV export escapes and adds a BOM for Excel', () {
