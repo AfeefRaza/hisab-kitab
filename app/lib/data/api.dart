@@ -108,6 +108,12 @@ class Api {
     return (res.data as Map).cast<String, dynamic>();
   }
 
+  /// Pulls courier payment status / CPRs (PostEx API) and builds settlement batches.
+  Future<Rec> syncPayments() async {
+    final res = await _db.functions.invoke('sync-payments', body: {});
+    return (res.data as Map).cast<String, dynamic>();
+  }
+
   Future<List<Rec>> syncRuns({int limit = 30}) async =>
       _rows(await _db.from('sync_runs').select().order('started_at', ascending: false).limit(limit));
 

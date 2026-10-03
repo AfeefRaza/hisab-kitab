@@ -77,6 +77,7 @@ Validated by [supabase/tests/finance_engine_test.sql](../supabase/tests/finance_
 |---|---|---|
 | `sync-orders` | every 30 min | Shopify GraphQL, `updated_at >= cursor`, sorted by `UPDATED_AT` ascending, 25 orders/page, 110 s budget, resumable. Cursor saved in `sync_state`. Backfill: Settings → Sync |
 | `sync-tracking` | hourly | Only shipments with `is_final = false` and `next_check_at <= now()`, ≤ 600 per run, grouped per courier (PostEx bulk 50/call, BlueEx batch 25/call). Next check 2–6 h depending on status; delivered/returned/cancelled/lost are never checked again |
+| `sync-payments` | every 3 h | PostEx `v1/payment-status/{tn}` for delivered/returned parcels until their CPR is known. `build_api_settlements()` creates one settlement batch per CPR (`source = 'api'`): delivered line = COD − fee − tax, returned line = −(reversal fee + tax). Parcels already in a manually imported statement are skipped |
 | reconcile | every 2 h | `auto_match_settlements()` + `refresh_alerts()` (also run after each import) |
 
 pg_cron calls the edge functions with a random secret kept in Vault (`hk_cron_secret`).

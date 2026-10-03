@@ -4,7 +4,7 @@
 
 1. **Dashboard** — check *Cash still with couriers* and *Settled, awaiting bank*.
 2. **Alerts** — work the critical ones first (COD mismatch, paid twice, settled-but-returned, deposit missing). Resolve with a note, or ignore with a reason.
-3. **Settlements → Import statement** — upload every courier payment file you received. Review the preview issues before importing.
+3. **Settlements** — PostEx CPRs arrive automatically (every 3 h, or *Fetch PostEx CPRs*). For other couriers, **Import statement** for every payment file you received. Review the preview issues before importing.
 4. **Bank → Import statement** — upload the latest bank statement (overlaps are fine; duplicates are skipped). Auto-match runs immediately; match the rest manually.
 5. **Expenses** — add ad spend and other costs (or record them from bank debits).
 

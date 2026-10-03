@@ -183,7 +183,10 @@ Future<void> runFullSync(BuildContext context) async {
     final o = await Api.instance.syncOrders(onProgress: (p) => status.value = 'Syncing Shopify orders… ${p['total_orders']} updated');
     status.value = 'Checking courier tracking…';
     final t = await Api.instance.syncTracking();
-    result = 'Synced ${o['total_orders']} orders · tracked ${t['applied']} parcels';
+    status.value = 'Fetching courier payments (CPRs)…';
+    final p = await Api.instance.syncPayments();
+    result = 'Synced ${o['total_orders']} orders · tracked ${t['applied']} parcels · '
+        '${p['settled'] ?? 0} payments checked';
   } catch (e) {
     failed = true;
     result = errorText(e);

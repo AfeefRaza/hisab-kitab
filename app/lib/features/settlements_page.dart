@@ -28,6 +28,22 @@ class _SettlementsPageState extends State<SettlementsPage> {
       subtitle: 'COD remittance statements from couriers, matched parcel-by-parcel and to your bank',
       actions: [
         if (AppState.session.canOperate)
+          OutlinedButton.icon(
+            onPressed: () async {
+              final ok = await runAction(context, () async {
+                final r = await Api.instance.syncPayments();
+                if (context.mounted) {
+                  showSnack(context, r['skipped'] != null
+                      ? '${r['skipped']}'
+                      : 'Checked ${r['checked']} parcels · ${r['settled']} settled by PostEx');
+                }
+              });
+              if (ok) AppState.dataChanged();
+            },
+            icon: const Icon(Icons.cloud_download_outlined),
+            label: const Text('Fetch PostEx CPRs'),
+          ),
+        if (AppState.session.canOperate)
           FilledButton.icon(
             onPressed: () => showDialog(context: context, builder: (_) => const SettlementImportDialog()),
             icon: const Icon(Icons.upload_file),
@@ -82,11 +98,15 @@ class _BatchesList extends StatelessWidget {
               empty: const EmptyState(
                 icon: Icons.upload_file,
                 title: 'No statements imported yet',
-                message: 'Import the COD payment files your couriers send (xlsx, csv or their .xls export).',
+                message: 'PostEx CPRs are fetched automatically every 3 hours (or press "Fetch PostEx CPRs").\n'
+                    'For other couriers, import the COD payment files they send (xlsx, csv or their .xls export).',
               ),
               columns: [
                 Col('Courier', (r) => Text(courierName(r['courier']), style: const TextStyle(fontWeight: FontWeight.w700))),
-                Col('Statement', (r) => Text('${r['statement_ref'] ?? r['file_name']}')),
+                Col('Statement', (r) => Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text('${r['statement_ref'] ?? r['file_name']}'),
+                      if (r['source'] == 'api') ...[const SizedBox(width: 6), const Pill('API', color: Palette.info)],
+                    ])),
                 Col('Date', (r) => Text(dateShort(r['statement_date']))),
                 Col('Parcels', (r) => Text(count(r['row_count'])), numeric: true),
                 Col('COD', (r) => Amount(r['total_cod']), numeric: true),

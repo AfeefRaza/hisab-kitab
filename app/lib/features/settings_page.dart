@@ -385,6 +385,7 @@ class _SyncTab extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('• Shopify orders: every 30 minutes (only changed orders)\n'
                 '• Courier tracking: hourly (only parcels that are not delivered/returned yet)\n'
+                '• PostEx payments (CPRs): every 3 hours — creates one settlement statement per CPR automatically\n'
                 '• Bank matching & alerts: every 2 hours, and after every import'),
             const SizedBox(height: 12),
             if (AppState.session.canOperate)
