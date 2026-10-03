@@ -185,8 +185,16 @@ Future<void> runFullSync(BuildContext context) async {
     final t = await Api.instance.syncTracking();
     status.value = 'Fetching courier payments (CPRs)…';
     final p = await Api.instance.syncPayments();
+    var ads = '';
+    try {
+      status.value = 'Fetching ad spend (Triple Whale)…';
+      final a = await Api.instance.syncAdSpend();
+      ads = ' · ad spend ${a['synced_days']} days';
+    } catch (_) {
+      // Triple Whale not connected — not an error for the overall sync
+    }
     result = 'Synced ${o['total_orders']} orders · tracked ${t['applied']} parcels · '
-        '${p['settled'] ?? 0} payments checked';
+        '${p['settled'] ?? 0} payments checked$ads';
   } catch (e) {
     failed = true;
     result = errorText(e);

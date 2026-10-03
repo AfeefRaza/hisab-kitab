@@ -52,6 +52,7 @@ The live URL is `https://<github-user>.github.io/<repo>/`.
 Settings → Integrations → **Configure** each provider → **Test connection** → **Test & save**:
 
 * **Shopify**: store domain `your-store.myshopify.com` + an Admin API access token (custom app with `read_orders`, `read_products`, `read_inventory`; `read_customers` optional for names/phones), or a Dev Dashboard app's client ID + secret.
+* **Triple Whale** (ad spend): store domain + API key with scope `summary-page:read` (Triple Whale → Settings → API Keys). Then Settings → Sync → *Backfill ad spend*. Remove any manually entered ad-spend expenses for the same days to avoid double counting.
 * **PostEx**: API token · **BlueEx**: API username + password · **Tranzo**: API token · **XPS**: auth key · **M&P**: no key needed (public tracking).
 
 Then on the dashboard press **Sync now**, and use Settings → Sync → **Backfill older orders** to import history (e.g. from the start of the year).

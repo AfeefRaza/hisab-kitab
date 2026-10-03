@@ -392,6 +392,7 @@ class _SyncTab extends StatelessWidget {
             const Text('• Shopify orders: every 30 minutes (only changed orders)\n'
                 '• Courier tracking: hourly (only parcels that are not delivered/returned yet)\n'
                 '• PostEx payments (CPRs): every 3 hours — creates one settlement statement per CPR automatically\n'
+                '• Ad spend (Triple Whale): every 6 hours, last 3 days — one marketing expense per channel per day\n'
                 '• Bank matching & alerts: every 2 hours, and after every import'),
             const SizedBox(height: 12),
             if (AppState.session.canOperate)
@@ -411,6 +412,31 @@ class _SyncTab extends StatelessWidget {
                     final ok = await runAction(context, () async {
                       final r = await Api.instance.syncOrders(from: ymd(d));
                       if (context.mounted) showSnack(context, 'Backfill done: ${r['total_orders']} orders');
+                    });
+                    if (ok) {
+                      reload();
+                      AppState.dataChanged();
+                    }
+                  },
+                ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.campaign_outlined),
+                  label: const Text('Backfill ad spend…'),
+                  onPressed: () async {
+                    final d = await showDatePicker(
+                      context: context,
+                      helpText: 'Import Triple Whale ad spend since',
+                      firstDate: DateTime.now().subtract(const Duration(days: 400)),
+                      lastDate: DateTime.now(),
+                      initialDate: DateTime(DateTime.now().year, DateTime.now().month - 2, 1),
+                    );
+                    if (d == null || !context.mounted) return;
+                    final ok = await runAction(context, () async {
+                      final r = await Api.instance.syncAdSpend(from: ymd(d));
+                      if (context.mounted) {
+                        showSnack(context, 'Ad spend: ${r['synced_days']} of ${r['days']} days · total ${rs(r['total_spend'])}'
+                            '${toNum(r['synced_days']) < toNum(r['days']) ? ' — run again to continue' : ''}');
+                      }
                     });
                     if (ok) {
                       reload();

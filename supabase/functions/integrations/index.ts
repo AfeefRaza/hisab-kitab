@@ -8,6 +8,7 @@
 import { authenticate, handle, HttpError, json, mask, serviceClient } from "../_shared/http.ts";
 import { type Courier, testCourier } from "../_shared/couriers.ts";
 import { normalizeDomain, ShopifyClient } from "../_shared/shopify.ts";
+import { testTripleWhale } from "../_shared/triplewhale.ts";
 
 const SECRET_FIELDS: Record<string, string[]> = {
   shopify: ["access_token", "client_id", "client_secret"],
@@ -16,6 +17,7 @@ const SECRET_FIELDS: Record<string, string[]> = {
   mnp: [],
   tranzo: ["api_token"],
   xps: ["auth_key"],
+  triplewhale: ["api_key"],
 };
 const CONFIG_FIELDS: Record<string, string[]> = {
   shopify: ["shop_domain", "api_version"],
@@ -24,6 +26,7 @@ const CONFIG_FIELDS: Record<string, string[]> = {
   mnp: ["account_no"],
   tranzo: ["account_id"],
   xps: ["account_id"],
+  triplewhale: ["shop_domain"],
 };
 
 function pick(obj: Record<string, unknown> | undefined, keys: string[]): Record<string, string> {
@@ -42,6 +45,11 @@ async function runTest(provider: string, config: Record<string, string>, secret:
       throw new Error("Provide an Admin API access token, or a client ID and client secret");
     }
     return await new ShopifyClient({ shop_domain: config.shop_domain, api_version: config.api_version }, secret).testConnection();
+  }
+  if (provider === "triplewhale") {
+    if (!config.shop_domain) throw new Error("Shop domain is required (your-store.myshopify.com)");
+    if (!secret.api_key) throw new Error("API key is required");
+    return await testTripleWhale(config.shop_domain, secret as { api_key: string });
   }
   const required = SECRET_FIELDS[provider];
   const missing = required.filter((k) => !secret[k]);

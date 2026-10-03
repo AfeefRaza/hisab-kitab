@@ -35,6 +35,10 @@ const _fields = <String, List<_Field>>{
   'mnp': [_Field('account_no', 'Account number', help: 'M&P tracking is public; no key needed')],
   'tranzo': [_Field('api_token', 'API token', secret: true, required: true), _Field('account_id', 'Account ID')],
   'xps': [_Field('auth_key', 'API auth key', secret: true, required: true), _Field('account_id', 'Account ID')],
+  'triplewhale': [
+    _Field('shop_domain', 'Shopify store domain', help: 'your-store.myshopify.com (as connected in Triple Whale)', required: true),
+    _Field('api_key', 'Triple Whale API key', secret: true, required: true, help: 'Triple Whale → Settings → API Keys, scope summary-page:read'),
+  ],
 };
 
 class IntegrationsPage extends StatelessWidget {
@@ -111,7 +115,7 @@ class _IntegrationCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(row['kind'] == 'store' ? Icons.storefront : Icons.local_shipping_outlined),
+            Icon(switch (row['kind']) { 'store' => Icons.storefront, 'marketing' => Icons.campaign_outlined, _ => Icons.local_shipping_outlined }),
             const SizedBox(width: 8),
             Expanded(child: Text('${row['display_name']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
             _statusPill('${row['status']}'),

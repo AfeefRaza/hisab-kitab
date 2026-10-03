@@ -36,6 +36,18 @@ class _ExpensesPageState extends State<ExpensesPage> {
             label: const Text('Add recurring'),
           ),
         if (canOp && _tab == 0)
+          OutlinedButton.icon(
+            onPressed: () async {
+              final ok = await runAction(context, () async {
+                final r = await Api.instance.syncAdSpend();
+                if (context.mounted) showSnack(context, 'Ad spend synced: ${rs(r['total_spend'])} over ${r['synced_days']} days');
+              });
+              if (ok) AppState.dataChanged();
+            },
+            icon: const Icon(Icons.campaign_outlined),
+            label: const Text('Sync ad spend'),
+          ),
+        if (canOp && _tab == 0)
           FilledButton.icon(
             onPressed: () async {
               final ok = await showDialog<bool>(context: context, builder: (_) => const ExpenseDialog());
@@ -133,6 +145,10 @@ class _EntriesView extends StatelessWidget {
               rows: rows,
               onTap: canOp
                   ? (e) async {
+                      if (e['source'] == 'triplewhale') {
+                        showSnack(context, 'Synced automatically from Triple Whale — it updates on every sync.');
+                        return;
+                      }
                       final ok = await showDialog<bool>(context: context, builder: (_) => ExpenseDialog(initial: e));
                       if (ok == true) AppState.dataChanged();
                     }
@@ -145,6 +161,7 @@ class _EntriesView extends StatelessWidget {
                 Col('Category', (e) => Row(mainAxisSize: MainAxisSize.min, children: [
                       Text('${e['category_name'] ?? ''}'),
                       if (e['recurring_id'] != null) ...[const SizedBox(width: 6), const Pill('Monthly', color: Palette.info)],
+                      if (e['source'] == 'triplewhale') ...[const SizedBox(width: 6), const Pill('Auto · Triple Whale', color: Palette.positive)],
                     ]), sort: 'category_name'),
                 Col('Vendor', (e) => Text('${e['vendor'] ?? ''}'), sort: 'vendor'),
                 Col('Description', (e) => SizedBox(width: 260, child: Text('${e['description'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis))),

@@ -122,6 +122,12 @@ class Api {
     return (res.data as Map).cast<String, dynamic>();
   }
 
+  /// Daily ad spend per channel from Triple Whale → automatic marketing expenses.
+  Future<Rec> syncAdSpend({String? from}) async {
+    final res = await _db.functions.invoke('sync-adspend', body: {'from': ?from});
+    return (res.data as Map).cast<String, dynamic>();
+  }
+
   Future<List<Rec>> syncRuns({int limit = 30}) async =>
       _rows(await _db.from('sync_runs').select().order('started_at', ascending: false).limit(limit));
 

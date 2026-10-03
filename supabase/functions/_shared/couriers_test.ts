@@ -99,3 +99,19 @@ Deno.test("mapOrder: money, lines, all tracking numbers, cancelled fulfilments s
   assertEquals(m.shipments.length, 1);
   assertEquals(m.shipments[0].tracking_number, "22085990000463");
 });
+
+import { parseSpend } from "./triplewhale.ts";
+
+Deno.test("Triple Whale: per-channel spend from summary-page metrics", () => {
+  const spend = parseSpend({
+    metrics: [
+      { id: "facebookAds", title: "Facebook Ads", values: { current: 10543.219, previous: 9000 } },
+      { id: "tiktokAds", values: { current: "2500" } },
+      { id: "blendedAds", values: { current: 13043.22 } }, // total — not a channel
+      { id: "sales", values: { current: 99999 } },
+      { metricName: "googleAds", value: 300 }, // documented alternative shape
+    ],
+  });
+  assertEquals(spend, { facebookAds: 10543.22, tiktokAds: 2500, googleAds: 300 });
+  assertEquals(parseSpend({}), {});
+});
