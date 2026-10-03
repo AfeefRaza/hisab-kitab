@@ -1,0 +1,29 @@
+# Supabase CLI configuration (used by `supabase link`, `supabase db push`,
+# `supabase functions deploy`). The production project ref is NOT a secret,
+# but keep it out of code paths: pass it with `supabase link --project-ref`.
+project_id = "hisab-kitab"
+
+[api]
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[auth]
+site_url = "http://localhost:8080"
+additional_redirect_urls = ["http://localhost:8080"]
+enable_signup = true
+
+[auth.email]
+enable_confirmations = true
+
+# sync-orders / sync-tracking authenticate callers themselves (user JWT + role
+# check, or the Vault cron secret), so the gateway JWT check is disabled to let
+# pg_cron call them. integrations keeps gateway JWT verification on.
+[functions.sync-orders]
+verify_jwt = false
+
+[functions.sync-tracking]
+verify_jwt = false
+
+[functions.integrations]
+verify_jwt = true

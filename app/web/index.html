@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Replaced by `flutter build web --base-href /hisab-kitab/` for GitHub Pages -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Hisab Kitab — COD reconciliation, courier settlements and profitability. Where is our money?">
+  <meta name="theme-color" content="#0F766E">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+
+  <!-- Install as an app on iOS (Share → Add to Home Screen) and Android -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Hisab Kitab">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="manifest" href="manifest.json">
+
+  <title>Hisab Kitab</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #F6F7F9; }
+    @media (prefers-color-scheme: dark) { html, body { background: #0f1514; } }
+    #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+              font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #0F766E; gap: 16px; }
+    #splash img { width: 72px; height: 72px; border-radius: 16px; }
+    #splash .bar { width: 140px; height: 4px; background: #0F766E22; border-radius: 4px; overflow: hidden; }
+    #splash .bar::after { content: ""; display: block; width: 40%; height: 100%; background: #0F766E; border-radius: 4px;
+              animation: slide 1.1s ease-in-out infinite; }
+    @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+  </style>
+</head>
+<body>
+  <div id="splash">
+    <img src="icons/Icon-192.png" alt="">
+    <strong>Hisab Kitab</strong>
+    <div class="bar"></div>
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var s = document.getElementById('splash');
+      if (s) s.remove();
+    });
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

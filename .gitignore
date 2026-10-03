@@ -1,0 +1,38 @@
+# ---- Secrets: never commit ------------------------------------------------
+.env
+.env.*
+!.env.example
+*.env
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+key.properties
+service-account*.json
+supabase/.temp/
+supabase/.branches/
+
+# ---- Legacy Lovable export (kept locally for reference only) --------------
+legacy/
+
+# ---- Build output / tooling ----------------------------------------------
+build/
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+coverage/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+
+# Local Claude/agent settings
+.claude/settings.local.json
