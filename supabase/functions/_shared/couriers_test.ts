@@ -39,6 +39,7 @@ Deno.test("normalizeStatus: returns are split into in-transit vs back with us", 
 
 Deno.test("normalizeStatus: cancelled is NOT a return (legacy bug)", () => {
   assertEquals(normalizeStatus("Cancelled"), "cancelled");
+  assertEquals(normalizeStatus("Un-Assigned By Me"), "unknown"); // PostEx code mapping turns this into cancelled
 });
 
 Deno.test("normalizeStatus: errors are not statuses (legacy bug counted them in transit)", () => {

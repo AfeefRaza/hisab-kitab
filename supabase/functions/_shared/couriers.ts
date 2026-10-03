@@ -154,6 +154,8 @@ function postexResult(dist: any): TrackResult {
       const raw = h.transactionStatusMessage ?? h.transactionStatus ?? "";
       let code = POSTEX_CODES[String(h.transactionStatusMessageCode ?? "")] ?? null;
       if (code === "returned" && /transit|route/i.test(raw)) code = "return_in_transit";
+      // "Un-Assigned By Me" = merchant cancelled the booking: no shipment, no charge
+      if (/un-?assigned|cancel/i.test(raw)) code = "cancelled";
       return ev(raw || code, h.updatedAt ?? h.transactionDateTime ?? h.createdAt, code);
     })
     .filter((e): e is TrackEvent => !!e);

@@ -51,7 +51,7 @@ Deno.serve(handle(async (req) => {
   if (body.shipment_ids?.length) {
     q = q.in("id", body.shipment_ids.slice(0, BATCH_LIMIT));
   } else {
-    q = q.eq("payment_complete", false).in("status", ["delivered", "returned"])
+    q = q.eq("payment_complete", false).in("status", ["delivered", "returned", "return_in_transit"])
       .lte("payment_next_check_at", new Date().toISOString()).order("payment_next_check_at");
   }
   const { data: due, error } = await q;

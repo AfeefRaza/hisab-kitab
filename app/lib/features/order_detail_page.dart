@@ -186,7 +186,12 @@ class _ProfitCard extends StatelessWidget {
         line('Revenue', o['revenue']),
         line('Tax collected (excluded)', o['total_tax']),
         line('Product cost', o['is_delivered'] == true ? o['cogs'] : 0, minus: true),
-        line('Courier charges', o['courier_cost'], minus: true, hint: o['courier_cost_source'] == 'actual' ? 'actual' : 'rate card'),
+        line('Courier charges', o['courier_cost'], minus: true, hint: switch (o['courier_cost_source']) {
+          'actual' => 'from settlement',
+          'courier_api' => 'courier per-parcel fee',
+          _ => 'rate card estimate',
+        }),
+        if (toNum(o['cod_withholding_tax']) > 0) line('  of which COD tax', o['cod_withholding_tax']),
         line('Packaging', o['packaging_cost'], minus: true),
         const Divider(),
         if (finalOrder)

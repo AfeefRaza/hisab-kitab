@@ -235,7 +235,8 @@ class _PnlCard extends StatelessWidget {
       child: Column(children: [
         line('Revenue (delivered, excl. tax)', pnl['revenue']),
         line('Product cost (COGS)', pnl['cogs'], minus: true),
-        line('Courier charges', pnl['courier_cost'], minus: true, hint: 'Actual from statements, else rate card'),
+        line('Courier charges', pnl['courier_cost'], minus: true,
+            hint: 'Per parcel from courier · incl. COD tax ${rs(pnl['cod_tax'])}'),
         line('Packaging', pnl['packaging_cost'], minus: true),
         const Divider(),
         line('Contribution', pnl['contribution'], total: true, hint: 'Includes ${rs(pnl['return_loss'])} lost on returns'),

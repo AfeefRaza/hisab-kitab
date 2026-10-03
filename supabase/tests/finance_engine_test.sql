@@ -20,6 +20,14 @@
 -- =====================================================================
 begin;
 
+-- Deterministic fixtures: the test's own rate cards and settings (rolled back at the end)
+update public.courier_rate_cards set delivery_charge = 200, return_charge = 100, cod_fee_percent = 0, cod_tax_percent = 0;
+update public.app_settings set value = '{"flyer_per_parcel": 5, "polybag_per_unit": 10}' where key = 'packaging';
+update public.app_settings set value = '{"income_tax_percent": 0}' where key = 'tax';
+update public.app_settings set value = '{"inventory_loss_percent": 0, "count_packaging_on_return": 1}' where key = 'returns';
+delete from public.product_cost_rules where match_type <> 'default';
+update public.product_cost_rules set unit_cost = 850, active = true where match_type = 'default';
+
 -- Act as an admin user so RLS + role checks run for real
 insert into auth.users (id, email, aud, role, instance_id)
 values ('00000000-0000-0000-0000-0000000000a1', 'test-admin@example.com', 'authenticated', 'authenticated',
@@ -27,13 +35,13 @@ values ('00000000-0000-0000-0000-0000000000a1', 'test-admin@example.com', 'authe
 update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-0000000000a1';
 
 insert into public.orders (id, name, created_at_shop, updated_at_shop, cancelled_at, is_cod, current_total, total_price, city) values
-  (9000001, '#T1', '2026-09-05 10:00+05', now(), null, true, 3000, 3000, 'Lahore'),
-  (9000002, '#T2', '2026-09-05 11:00+05', now(), null, true, 2000, 2000, 'Karachi'),
-  (9000003, '#T3', '2026-09-06 10:00+05', now(), null, true, 1500, 1500, 'Lahore'),
-  (9000004, '#T4', '2026-09-06 12:00+05', now(), null, true, 1000, 1000, 'Multan'),
-  (9000005, '#T5', '2026-09-07 10:00+05', now(), '2026-09-07 12:00+05', true, 1200, 1200, 'Multan'),
-  (9000006, '#T6', '2026-09-07 15:00+05', now(), null, true, 2600, 2600, 'Karachi'),
-  (9000007, '#T7', '2026-09-08 09:00+05', now(), null, true, 1800, 1800, 'Quetta');
+  (9000001, '#T1', '2020-01-05 10:00+05', now(), null, true, 3000, 3000, 'Lahore'),
+  (9000002, '#T2', '2020-01-05 11:00+05', now(), null, true, 2000, 2000, 'Karachi'),
+  (9000003, '#T3', '2020-01-06 10:00+05', now(), null, true, 1500, 1500, 'Lahore'),
+  (9000004, '#T4', '2020-01-06 12:00+05', now(), null, true, 1000, 1000, 'Multan'),
+  (9000005, '#T5', '2020-01-07 10:00+05', now(), '2020-01-07 12:00+05', true, 1200, 1200, 'Multan'),
+  (9000006, '#T6', '2020-01-07 15:00+05', now(), null, true, 2600, 2600, 'Karachi'),
+  (9000007, '#T7', '2020-01-08 09:00+05', now(), null, true, 1800, 1800, 'Quetta');
 
 insert into public.order_lines (id, order_id, title, quantity, current_quantity, unit_price, unit_cost) values
   (1, 9000001, 'Black Hoodie', 1, 1, 3000, 1000),
@@ -45,17 +53,17 @@ insert into public.order_lines (id, order_id, title, quantity, current_quantity,
   (7, 9000007, 'Jacket', 1, 1, 1800, 900);
 
 insert into public.shipments (order_id, tracking_number, courier, fulfilled_at, status, status_at, delivered_at, returned_at, is_final) values
-  (9000001, '22000000000001', 'postex', '2026-09-05 18:00+05', 'delivered', '2026-09-07 12:00+05', '2026-09-07 12:00+05', null, true),
-  (9000002, '22000000000002', 'postex', '2026-09-05 18:00+05', 'delivered', '2026-09-08 12:00+05', '2026-09-08 12:00+05', null, true),
-  (9000003, '50300000003', 'blueex', '2026-09-06 18:00+05', 'returned', '2026-09-12 12:00+05', null, '2026-09-12 12:00+05', true),
-  (9000006, '55900000006', 'mnp', '2026-09-07 18:00+05', 'delivered', '2026-09-09 12:00+05', '2026-09-09 12:00+05', null, true),
+  (9000001, '22000000000001', 'postex', '2020-01-05 18:00+05', 'delivered', '2020-01-07 12:00+05', '2020-01-07 12:00+05', null, true),
+  (9000002, '22000000000002', 'postex', '2020-01-05 18:00+05', 'delivered', '2020-01-08 12:00+05', '2020-01-08 12:00+05', null, true),
+  (9000003, '50300000003', 'blueex', '2020-01-06 18:00+05', 'returned', '2020-01-12 12:00+05', null, '2020-01-12 12:00+05', true),
+  (9000006, '55900000006', 'mnp', '2020-01-07 18:00+05', 'delivered', '2020-01-09 12:00+05', '2020-01-09 12:00+05', null, true),
   (9000007, 'T00000007', 'tranzo', now() - interval '10 days', 'in_transit', now() - interval '10 days', null, null, false);
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","email":"test-admin@example.com"}';
 
 -- Courier statements
-select public.import_settlement('postex', 'postex-1.xlsx', 'sha-test-1', 'PX-1', '2026-09-12',
+select public.import_settlement('postex', 'postex-1.xlsx', 'sha-test-1', 'PX-1', '2020-01-12',
   '[{"tracking_number":"22000000000001","cod_amount":3000,"courier_charges":250}]'::jsonb);
 select public.import_settlement('mnp', 'mnp-1.xlsx', 'sha-test-2', 'MNP-1', (current_date - 20),
   '[{"tracking_number":"55900000006","cod_amount":2500,"courier_charges":200}]'::jsonb);
@@ -63,7 +71,7 @@ select public.import_settlement('mnp', 'mnp-1.xlsx', 'sha-test-2', 'MNP-1', (cur
 -- Duplicate file must be rejected
 do $$
 begin
-  perform public.import_settlement('postex', 'postex-1-copy.xlsx', 'sha-test-1', 'PX-1', '2026-09-12',
+  perform public.import_settlement('postex', 'postex-1-copy.xlsx', 'sha-test-1', 'PX-1', '2020-01-12',
     '[{"tracking_number":"22000000000001","cod_amount":3000,"courier_charges":250}]'::jsonb);
   raise exception 'FAIL: duplicate settlement file was accepted';
 exception when unique_violation then null;
@@ -73,16 +81,16 @@ end $$;
 insert into public.bank_accounts (name, bank) values ('Test Meezan', 'Meezan');
 select public.import_bank_statement(
   (select id from public.bank_accounts where name = 'Test Meezan'), 'stmt.csv', 'sha-bank-1',
-  '[{"date":"2026-09-14","description":"IBFT POSTEX PVT LTD","credit":2750,"balance":10000},
-    {"date":"2026-09-14","description":"Office rent","debit":500,"balance":9500}]'::jsonb);
+  '[{"date":"2020-01-14","description":"IBFT POSTEX PVT LTD","credit":2750,"balance":10000},
+    {"date":"2020-01-14","description":"Office rent","debit":500,"balance":9500}]'::jsonb);
 
 -- Marketing expense in window
 insert into public.expenses (expense_date, category_id, amount)
-values ('2026-09-06', (select id from public.expense_categories where name = 'Facebook / Meta Ads'), 1000);
+values ('2020-01-06', (select id from public.expense_categories where name = 'Facebook / Meta Ads'), 1000);
 
 do $$
 declare
-  s jsonb := public.finance_summary('2026-09-01', '2026-09-10');
+  s jsonb := public.finance_summary('2020-01-01', '2020-01-10');
   pnl jsonb := s -> 'pnl';
   st text;
   c numeric;
@@ -168,6 +176,16 @@ begin
   perform public.import_settlement('postex', 'x.xlsx', 'sha-viewer', null, null, '[{"tracking_number":"1","cod_amount":1}]'::jsonb);
   raise exception 'FAIL viewer could import a settlement';
 exception when insufficient_privilege then null;
+end $$;
+
+-- COD withholding tax: 4% on PostEx → O2 (with courier, rate-card estimate) costs 200 + 4% of 2000 = 280
+reset role;
+update public.courier_rate_cards set cod_tax_percent = 4 where courier = 'postex';
+do $$
+declare c numeric; t numeric;
+begin
+  select courier_cost, cod_withholding_tax into c, t from public.v_order_finance where order_id = 9000002;
+  if c <> 280 or t <> 80 then raise exception 'FAIL COD tax: cost %, tax % (expected 280 / 80)', c, t; end if;
 end $$;
 
 select 'ALL FINANCE TESTS PASSED' as result;
