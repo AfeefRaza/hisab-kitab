@@ -552,6 +552,42 @@ Future<String?> promptText(BuildContext context, String title, {String label = '
   );
 }
 
+/// Runs [work] behind a modal progress dialog; [work] gets a callback to update the message.
+Future<T?> withProgress<T>(BuildContext context, String initial, Future<T> Function(void Function(String) update) work) async {
+  final msg = ValueNotifier<String>(initial);
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => AlertDialog(
+      content: Row(children: [
+        const CircularProgressIndicator(),
+        const SizedBox(width: 20),
+        Expanded(child: ValueListenableBuilder(valueListenable: msg, builder: (_, v, _) => Text(v))),
+      ]),
+    ),
+  );
+  try {
+    return await work((m) => msg.value = m);
+  } catch (e) {
+    if (context.mounted) showSnack(context, errorText(e), error: true);
+    return null;
+  } finally {
+    if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+  }
+}
+
+/// Imports Triple Whale ad spend for a date range with progress, then refreshes the app.
+Future<void> importAdSpend(BuildContext context, DateTime from, DateTime to) async {
+  final r = await withProgress(context, 'Importing ad spend\u2026', (update) => Api.instance.syncAdSpendRange(from, to,
+      onProgress: (d, t) => update('Importing ad spend from Triple Whale\u2026 ${t == 0 ? 0 : (100 * d / t).round()}%')));
+  if (r == null) return;
+  AppState.dataChanged();
+  if (context.mounted) {
+    showSnack(context, 'Ad spend imported for ${r.synced} of ${r.days} days (${dateShort(from)} \u2013 ${dateShort(to)}): ${rs(r.total)}'
+        '${r.synced < r.days ? ' \u2014 some days failed, try again' : ''}', error: r.synced < r.days);
+  }
+}
+
 /// Runs an async action with a snackbar for success/failure. Returns true on success.
 Future<bool> runAction(BuildContext context, Future<void> Function() action, {String? success}) async {
   try {

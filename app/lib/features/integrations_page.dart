@@ -220,8 +220,14 @@ class _ConfigureDialogState extends State<_ConfigureDialog> {
         _message = '${r['message'] ?? r['error'] ?? ''}';
       });
       if (action == 'save' && r['ok'] == true && mounted) {
-        Navigator.pop(context, true);
-        showSnack(context, 'Saved — ${r['message']}');
+        final nav = Navigator.of(context);
+        final rootContext = nav.context;
+        nav.pop(true);
+        if (rootContext.mounted) showSnack(rootContext, 'Saved \u2014 ${r['message']}');
+        if (provider == 'triplewhale' && rootContext.mounted) {
+          final now = DateTime.now();
+          await importAdSpend(rootContext, DateTime(now.year, now.month, now.day).subtract(const Duration(days: 89)), now);
+        }
       }
     } catch (e) {
       setState(() {

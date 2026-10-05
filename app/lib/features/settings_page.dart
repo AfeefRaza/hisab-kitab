@@ -431,17 +431,8 @@ class _SyncTab extends StatelessWidget {
                       initialDate: DateTime(DateTime.now().year, DateTime.now().month - 2, 1),
                     );
                     if (d == null || !context.mounted) return;
-                    final ok = await runAction(context, () async {
-                      final r = await Api.instance.syncAdSpend(from: ymd(d));
-                      if (context.mounted) {
-                        showSnack(context, 'Ad spend: ${r['synced_days']} of ${r['days']} days · total ${rs(r['total_spend'])}'
-                            '${toNum(r['synced_days']) < toNum(r['days']) ? ' — run again to continue' : ''}');
-                      }
-                    });
-                    if (ok) {
-                      reload();
-                      AppState.dataChanged();
-                    }
+                    await importAdSpend(context, d, DateTime.now());
+                    reload();
                   },
                 ),
                 OutlinedButton.icon(

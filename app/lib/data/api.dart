@@ -123,9 +123,32 @@ class Api {
   }
 
   /// Daily ad spend per channel from Triple Whale → automatic marketing expenses.
-  Future<Rec> syncAdSpend({String? from}) async {
-    final res = await _db.functions.invoke('sync-adspend', body: {'from': ?from});
+  Future<Rec> syncAdSpend({String? from, String? to}) async {
+    final res = await _db.functions.invoke('sync-adspend', body: {'from': ?from, 'to': ?to});
     return (res.data as Map).cast<String, dynamic>();
+  }
+
+  /// Imports Triple Whale ad spend for any range, one month-sized chunk per call.
+  Future<({int days, int synced, num total})> syncAdSpendRange(DateTime from, DateTime to,
+      {void Function(int done, int total)? onProgress}) async {
+    final today = DateTime.now();
+    if (to.isAfter(today)) to = DateTime(today.year, today.month, today.day);
+    final chunks = <(DateTime, DateTime)>[];
+    for (var s = from; !s.isAfter(to); s = s.add(const Duration(days: 31))) {
+      final e = s.add(const Duration(days: 30));
+      chunks.add((s, e.isAfter(to) ? to : e));
+    }
+    var days = 0, synced = 0;
+    num total = 0;
+    for (var i = 0; i < chunks.length; i++) {
+      onProgress?.call(i, chunks.length);
+      final r = await syncAdSpend(from: ymd(chunks[i].$1), to: ymd(chunks[i].$2));
+      days += toNum(r['days']).toInt();
+      synced += toNum(r['synced_days']).toInt();
+      total += toNum(r['total_spend']);
+    }
+    onProgress?.call(chunks.length, chunks.length);
+    return (days: days, synced: synced, total: total);
   }
 
   Future<List<Rec>> syncRuns({int limit = 30}) async =>

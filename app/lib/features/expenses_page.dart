@@ -37,15 +37,9 @@ class _ExpensesPageState extends State<ExpensesPage> {
           ),
         if (canOp && _tab == 0)
           OutlinedButton.icon(
-            onPressed: () async {
-              final ok = await runAction(context, () async {
-                final r = await Api.instance.syncAdSpend();
-                if (context.mounted) showSnack(context, 'Ad spend synced: ${rs(r['total_spend'])} over ${r['synced_days']} days');
-              });
-              if (ok) AppState.dataChanged();
-            },
+            onPressed: () => importAdSpend(context, AppState.period.value.start, AppState.period.value.end),
             icon: const Icon(Icons.campaign_outlined),
-            label: const Text('Sync ad spend'),
+            label: Text('Import ad spend (${AppState.period.label})'),
           ),
         if (canOp && _tab == 0)
           FilledButton.icon(

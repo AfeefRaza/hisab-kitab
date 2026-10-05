@@ -98,11 +98,19 @@ class DashboardPage extends StatelessWidget {
                 onTap: () => context.go('/orders?state=returned'),
               ),
               KpiCard(
-                label: 'Expenses',
-                value: rs(pnl['expenses']),
-                hint: 'Marketing ${rs(pnl['marketing'])} · ROAS ${pnl['roas'] == null ? '—' : '${pnl['roas']}x'}',
-                icon: Icons.payments_outlined,
+                label: 'Ad spend',
+                value: rs(pnl['marketing']),
+                hint: _adHint(s, pnl),
+                icon: Icons.campaign_outlined,
                 color: Palette.warning,
+                onTap: () => context.go('/expenses'),
+              ),
+              KpiCard(
+                label: 'Other expenses',
+                value: rs(toNum(pnl['expenses']) - toNum(pnl['marketing'])),
+                hint: 'Salaries, rent, software\u2026 (allocated to this period)',
+                icon: Icons.payments_outlined,
+                color: Palette.muted,
                 onTap: () => context.go('/expenses'),
               ),
               KpiCard(
@@ -240,7 +248,8 @@ class _PnlCard extends StatelessWidget {
         line('Packaging', pnl['packaging_cost'], minus: true),
         const Divider(),
         line('Contribution', pnl['contribution'], total: true, hint: 'Includes ${rs(pnl['return_loss'])} lost on returns'),
-        line('Operating expenses', pnl['expenses'], minus: true),
+        line('Ad spend', pnl['marketing'], minus: true, hint: 'Triple Whale + manual marketing expenses'),
+        line('Other expenses', toNum(pnl['expenses']) - toNum(pnl['marketing']), minus: true),
         line('Tax', pnl['tax'], minus: true),
         const Divider(),
         line('Net profit', pnl['net_profit'], total: true),
@@ -257,10 +266,11 @@ class _DailyChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     if (daily.isEmpty) return const SectionCard(title: 'Daily trend', child: SizedBox(height: 220));
-    final sales = <FlSpot>[], contrib = <FlSpot>[];
+    final sales = <FlSpot>[], contrib = <FlSpot>[], ads = <FlSpot>[];
     for (var i = 0; i < daily.length; i++) {
       sales.add(FlSpot(i.toDouble(), toNum(daily[i]['gross_sales']).toDouble()));
       contrib.add(FlSpot(i.toDouble(), toNum(daily[i]['contribution']).toDouble()));
+      ads.add(FlSpot(i.toDouble(), toNum(daily[i]['ad_spend']).toDouble()));
     }
     final step = (daily.length / 6).ceil().clamp(1, 1000);
     return SectionCard(
@@ -268,6 +278,7 @@ class _DailyChart extends StatelessWidget {
       trailing: Wrap(spacing: 12, children: [
         _legend(scheme.primary, 'Gross sales'),
         _legend(Palette.positive, 'Contribution (final orders)'),
+        _legend(Palette.warning, 'Ad spend'),
       ]),
       child: SizedBox(
         height: 260,
@@ -302,7 +313,7 @@ class _DailyChart extends StatelessWidget {
               getTooltipItems: (spots) => [
                 for (final s in spots)
                   LineTooltipItem(
-                    '${s.barIndex == 0 ? 'Sales' : 'Contribution'}: ${rs(s.y)}',
+                    '${const ['Sales', 'Contribution', 'Ad spend'][s.barIndex]}: ${rs(s.y)}',
                     TextStyle(color: s.bar.color, fontWeight: FontWeight.w700, fontSize: 12),
                   ),
               ],
@@ -312,6 +323,7 @@ class _DailyChart extends StatelessWidget {
             LineChartBarData(spots: sales, color: scheme.primary, barWidth: 2.5, dotData: const FlDotData(show: false), isCurved: true, preventCurveOverShooting: true,
                 belowBarData: BarAreaData(show: true, color: scheme.primary.withValues(alpha: 0.08))),
             LineChartBarData(spots: contrib, color: Palette.positive, barWidth: 2, dotData: const FlDotData(show: false), isCurved: true, preventCurveOverShooting: true),
+            LineChartBarData(spots: ads, color: Palette.warning, barWidth: 2, dashArray: const [6, 4], dotData: const FlDotData(show: false), isCurved: true, preventCurveOverShooting: true),
           ],
         )),
       ),
@@ -353,4 +365,18 @@ class _NoticesCard extends StatelessWidget {
     if (notes.isEmpty) return const SizedBox.shrink();
     return SectionCard(title: 'Accuracy notes', padding: const EdgeInsets.fromLTRB(8, 16, 8, 8), child: Column(children: notes));
   }
+}
+
+/// "Meta Rs 75,306 · TikTok … · ROAS 3.2x · Rs 640 per delivered order"
+String _adHint(Map<String, dynamic> summary, Map<String, dynamic> pnl) {
+  final cats = (summary['expenses_by_category'] as List? ?? const [])
+      .where((c) => c['kind'] == 'marketing' && toNum(c['amount']) > 0)
+      .map((c) => '${'${c['category']}'.replaceAll(' Ads', '').replaceAll('Facebook / ', '')} ${rsCompact(c['amount'])}')
+      .take(3)
+      .toList();
+  final delivered = toNum(pnl['delivered']);
+  final perOrder = delivered > 0 && toNum(pnl['marketing']) > 0 ? ' \u00b7 ${rs(toNum(pnl['marketing']) / delivered)} per delivered order' : '';
+  final roas = pnl['roas'] == null ? '' : ' \u00b7 ROAS ${pnl['roas']}x';
+  if (cats.isEmpty) return 'No ad spend in this period \u2014 import it on the Expenses page';
+  return '${cats.join(' \u00b7 ')}$roas$perOrder';
 }
