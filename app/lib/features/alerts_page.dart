@@ -14,6 +14,7 @@ const _kindLabels = {
   'settled_but_returned': 'Settled but returned',
   'duplicate_settlement': 'Paid twice',
   'bank_deposit_missing': 'Deposit missing in bank',
+  'bank_data_missing': 'Bank data missing',
   'stuck_shipment': 'Stuck parcel',
   'courier_overcharge': 'High courier charge',
   'cancelled_but_delivered': 'Cancelled but delivered',
@@ -40,6 +41,8 @@ class _AlertsPageState extends State<AlertsPage> {
         context.go('/orders/${a['entity_id']}');
       case 'settlement_batch':
         context.go('/settlements/${a['entity_id']}');
+      case 'bank':
+        context.go('/bank');
       default:
         context.go('/settlements');
     }

@@ -46,19 +46,26 @@ export function normalizeStatus(text: string | null | undefined): ShipmentStatus
   if (!t) return null;
   if (/(not found|invalid|error|no record|unauthori[sz]ed|credentials)/.test(t)) return null;
 
+  // Parcel heading back to us ("En Route to Merchant Warehouse") is a return, not transit
+  if (/(en ?route|on route|departed|dispatched|forwarded) to (merchant|shipper|origin|vendor|seller)/.test(t)) return "return_in_transit";
   if (/(return|\brto\b|reversed)/.test(t)) {
-    if (/(returned to (shipper|origin|vendor|merchant|seller|client)|return(ed)? delivered|rto delivered|delivered to (shipper|origin|vendor|merchant|seller)|received at origin|return received|returned$|^returned to)/.test(t)) {
+    if (/(returned (to|at) (shipper|origin|vendor|merchant|seller|client)|return(ed)? delivered|rto delivered|delivered to (shipper|origin|vendor|merchant|seller)|received at origin|return received|returned$|^returned to)/.test(t)) {
       return "returned";
     }
     return "return_in_transit";
   }
   if (/cancel/.test(t)) return "cancelled";
   if (/\blost\b|missing|damaged/.test(t)) return "lost";
-  if (/(refused|rejected|not accepted|undelivered|un-delivered|consignee not available|not available|wrong address|incomplete address|attempt|under review|shipper request|on hold|\bhold\b|no response|failed)/.test(t)) {
+  if (/(refused|rejected|not accepted|undelivered|un-delivered|not delivered|consignee not available|not available|wrong address|incomplete address|attempt|under review|shipper request|on hold|\bhold\b|no response|failed)/.test(t)) {
     return "delivery_failed";
   }
-  if (/(out for delivery|out-for-delivery|\bofd\b|on route for delivery|with rider)/.test(t)) return "out_for_delivery";
-  if (/deliver/.test(t)) return "delivered";
+  if (/(out for delivery|out-for-delivery|\bofd\b|(on|en) ?route for delivery|with rider)/.test(t)) return "out_for_delivery";
+  // Only an explicit, completed delivery counts. "Waiting for Delivery" etc. are
+  // not deliveries — treating them as one recognised revenue and COD early.
+  if (/\bdelivered\b/.test(t) && !/(waiting|awaiting|pending|for delivery|to be delivered|not delivered|undelivered)/.test(t)) {
+    return "delivered";
+  }
+  if (/deliver/.test(t)) return "in_transit";
   if (/(unbooked|booked|order created|^created|pending pickup|ready for pickup|label printed|at merchant)/.test(t)) return "booked";
   if (/(transit|warehouse|dispatch|arrived|departed|received at|picked|hub|on the way|shipped|forwarded|sorting|on route|package on route)/.test(t)) {
     return "in_transit";
@@ -147,16 +154,30 @@ const POSTEX_CODES: Record<string, ShipmentStatus> = {
   "0013": "delivery_failed",
 };
 
-function postexResult(dist: any): TrackResult {
+/**
+ * Status of one PostEx history entry. The event text decides; the status code is
+ * only a fallback for text we don't recognise, and never on its own makes a
+ * parcel delivered (only an explicit "Delivered…" text does).
+ */
+export function postexStatus(raw: string | null | undefined, code?: string | null): ShipmentStatus | null {
+  const text = String(raw ?? "");
+  // "Un-Assigned By Me" / "Booking Cancelled by Merchant": no shipment, no charge
+  if (/un-?assigned|cancel/i.test(text)) return "cancelled";
+  const fromText = normalizeStatus(text);
+  if (fromText && fromText !== "unknown") return fromText;
+  let fromCode = POSTEX_CODES[String(code ?? "")] ?? null;
+  if (fromCode === "delivered") fromCode = "in_transit";
+  if (fromCode === "returned" && /transit|route/i.test(text)) fromCode = "return_in_transit";
+  return fromCode ?? fromText;
+}
+
+export function postexResult(dist: any): TrackResult {
   const history: any[] = Array.isArray(dist?.transactionStatusHistory) ? dist.transactionStatusHistory : [];
   const events = history
     .map((h) => {
       const raw = h.transactionStatusMessage ?? h.transactionStatus ?? "";
-      let code = POSTEX_CODES[String(h.transactionStatusMessageCode ?? "")] ?? null;
-      if (code === "returned" && /transit|route/i.test(raw)) code = "return_in_transit";
-      // "Un-Assigned By Me" = merchant cancelled the booking: no shipment, no charge
-      if (/un-?assigned|cancel/i.test(raw)) code = "cancelled";
-      return ev(raw || code, h.updatedAt ?? h.transactionDateTime ?? h.createdAt, code);
+      const status = postexStatus(raw, h.transactionStatusMessageCode);
+      return ev(raw || status, h.updatedAt ?? h.transactionDateTime ?? h.createdAt, status);
     })
     .filter((e): e is TrackEvent => !!e);
   return result(events, dist?.transactionStatus);

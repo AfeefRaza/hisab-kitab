@@ -43,6 +43,7 @@ final _router = GoRouter(
           builder: (_, s) => OrdersPage(
             initialState: s.uri.queryParameters['state'],
             initialCourier: s.uri.queryParameters['courier'],
+            allTime: s.uri.queryParameters['all'] == '1',
           ),
         ),
         GoRoute(path: '/orders/:id', builder: (_, s) => OrderDetailPage(orderId: int.parse(s.pathParameters['id']!))),

@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { detectCourier, normalizeStatus, parseCourierDate } from "./couriers.ts";
+import { detectCourier, normalizeStatus, parseCourierDate, postexResult, postexStatus } from "./couriers.ts";
 import { isCodOrder, mapOrder } from "./shopify.ts";
 
 Deno.test("detectCourier: tracking number shapes", () => {
@@ -55,6 +55,62 @@ Deno.test("normalizeStatus: in transit / booked", () => {
   assertEquals(normalizeStatus("At PostEx Warehouse"), "in_transit");
   assertEquals(normalizeStatus("Arrived at Lahore Hub"), "in_transit");
   assertEquals(normalizeStatus("Something new"), "unknown");
+});
+
+Deno.test("audit C1: waiting / pending delivery is never delivered", () => {
+  assertEquals(normalizeStatus("Waiting for Delivery"), "in_transit");
+  assertEquals(normalizeStatus("Awaiting delivery"), "in_transit");
+  assertEquals(normalizeStatus("Enroute for Delivery"), "out_for_delivery");
+  assertEquals(normalizeStatus("Delivered to Customer"), "delivered");
+  assertEquals(normalizeStatus("Not delivered"), "delivery_failed");
+  assertEquals(postexStatus("Waiting for Delivery", "0005"), "in_transit"); // even with a 'delivered' code
+  assertEquals(postexStatus("Delivered to Customer", "0005"), "delivered");
+  assertEquals(postexStatus("Booking Cancelled by Merchant", "0002"), "cancelled");
+  assertEquals(postexStatus("En Route to Merchant Warehouse", "0003"), "return_in_transit");
+  assertEquals(postexStatus("Returned at Merchant Warehouse", "0002"), "returned");
+});
+
+// Real PostEx event sequences from the audit (#haven33776 / #haven33684 refused & returned, #haven33633 returning)
+const seq = (...steps: [string, string][]) => ({
+  transactionStatusHistory: steps.map(([msg, at]) => ({ transactionStatusMessage: msg, updatedAt: at })),
+});
+
+Deno.test("audit C2: refused parcel ends returned, never delivered on the way", () => {
+  const r = postexResult(seq(
+    ["At HavenWear Warehouse", "2026-10-01T10:00:00+05:00"],
+    ["Received at KHI Warehouse", "2026-10-02T09:00:00+05:00"],
+    ["Waiting for Delivery", "2026-10-04T08:00:00+05:00"],
+    ["Enroute for Delivery", "2026-10-04T10:00:00+05:00"],
+    ["Attempt Made: RFD(REFUSED TO RECEIVE)", "2026-10-04T16:00:00+05:00"],
+    ["Waiting for Return", "2026-10-06T09:00:00+05:00"],
+    ["Return Process Initiated", "2026-10-07T09:00:00+05:00"],
+    ["Return to KARACHI", "2026-10-09T09:00:00+05:00"],
+    ["En Route to Merchant Warehouse", "2026-10-14T12:00:00+05:00"],
+    ["Returned at Merchant Warehouse", "2026-10-14T22:12:00+05:00"],
+  ));
+  if (!r.ok) throw new Error("expected ok");
+  assertEquals(r.status, "returned");
+  assertEquals(r.events.some((e) => e.status === "delivered"), false);
+});
+
+Deno.test("audit C2: parcel heading back is returning, not delivered", () => {
+  const r = postexResult(seq(
+    ["Waiting for Delivery", "2026-10-04T08:00:00+05:00"],
+    ["Attempt Made: CNA(CUSTOMER NOT AVAILABLE)", "2026-10-05T15:00:00+05:00"],
+    ["Return Process Initiated", "2026-10-08T09:00:00+05:00"],
+    ["En Route to Merchant Warehouse", "2026-10-15T11:00:00+05:00"],
+  ));
+  if (!r.ok) throw new Error("expected ok");
+  assertEquals(r.status, "return_in_transit");
+});
+
+Deno.test("audit C1: waiting parcel stays undelivered until the courier confirms", () => {
+  const waiting = postexResult(seq(["Waiting for Delivery", "2026-10-16T13:32:00+05:00"]));
+  if (!waiting.ok) throw new Error("expected ok");
+  assertEquals(waiting.status, "in_transit");
+  const done = postexResult(seq(["Waiting for Delivery", "2026-10-16T13:32:00+05:00"], ["Delivered to Customer", "2026-10-17T12:00:00+05:00"]));
+  if (!done.ok) throw new Error("expected ok");
+  assertEquals(done.status, "delivered");
 });
 
 Deno.test("parseCourierDate: formats default to PKT", () => {

@@ -105,6 +105,20 @@ class _IntegrationCard extends StatelessWidget {
 
   String get provider => row['provider'] as String;
 
+  /// Sync health for a connected courier: never-synced is a fault only if parcels exist.
+  (String, Color)? _health() {
+    if (row['kind'] != 'courier' || row['status'] != 'connected') return null;
+    final parcels = toNum(row['parcels']);
+    if (parcels == 0) {
+      return ('No parcels booked with this courier found in Shopify orders, so there is nothing to sync. '
+          'If you do ship with it, check the tracking company name set on Shopify fulfilments.', Palette.warning);
+    }
+    if (row['last_sync_at'] == null) {
+      return ('${count(parcels)} parcels but never synced successfully — check the credentials and run a sync.', Palette.negative);
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final hint = (row['secret_hint'] as Map?)?.cast<String, dynamic>() ?? {};
@@ -130,9 +144,18 @@ class _IntegrationCard extends StatelessWidget {
               if (row['last_test_message'] != null) 'Last test: ${row['last_test_message']}',
               if (row['last_tested_at'] != null) dateTime(row['last_tested_at']),
               'Last sync: ${ago(row['last_sync_at'])}',
+              if (row['parcels'] != null) 'Parcels in synced orders: ${count(row['parcels'])}',
             ].join('\n'),
             style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
+          if (_health() case final h?) ...[
+            const SizedBox(height: 8),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.info_outline, size: 16, color: h.$2),
+              const SizedBox(width: 6),
+              Expanded(child: Text(h.$1, style: TextStyle(fontSize: 12, color: h.$2))),
+            ]),
+          ],
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
             FilledButton.tonal(onPressed: () => _configure(context), child: Text(configured ? 'Reconfigure' : 'Configure')),

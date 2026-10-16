@@ -23,7 +23,8 @@ class _ProfitPageState extends State<ProfitPage> {
   Widget build(BuildContext context) {
     return PageBody(
       title: 'Profitability',
-      subtitle: 'Which couriers, cities and products actually make money (orders placed in the period)',
+      subtitle: 'Which couriers, cities and products actually make money (orders placed in the period). '
+          'Delivered / completed = delivered ÷ (delivered + returned); parcels still on the way are not counted.',
       children: [
         SegmentedButton<String>(
           segments: const [
@@ -39,9 +40,14 @@ class _ProfitPageState extends State<ProfitPage> {
           load: () => Api.instance.profitBreakdown(AppState.period.value.start, AppState.period.value.end, _dim),
           builder: (context, rows, _) {
             final label = {'courier': 'Courier', 'city': 'City', 'product': 'Product'}[_dim]!;
+            final plural = {'courier': 'couriers', 'city': 'cities', 'product': 'products'}[_dim]!;
             String name(Rec r) => _dim == 'courier' ? courierName(r['key']) : '${r['key']}';
+            String rate(Rec r) {
+              final done = toNum(r['delivered']) + toNum(r['returned']);
+              return done == 0 ? '—' : '${pct(r['delivery_rate'])} (${count(r['delivered'])}/${count(done)})';
+            }
             return SectionCard(
-              title: '${rows.length} ${label.toLowerCase()}${rows.length == 1 ? '' : 's'}',
+              title: '${rows.length} ${rows.length == 1 ? label.toLowerCase() : plural}',
               trailing: TextButton.icon(
                 icon: const Icon(Icons.download),
                 label: const Text('CSV'),
@@ -61,9 +67,9 @@ class _ProfitPageState extends State<ProfitPage> {
                   Col('Orders', (r) => Text(count(r['orders'])), numeric: true, sort: 'orders'),
                   Col('Delivered', (r) => Text(count(r['delivered'])), numeric: true, sort: 'delivered'),
                   Col('Returned', (r) => Text(count(r['returned'])), numeric: true, sort: 'returned'),
-                  Col('Delivery %', (r) {
+                  Col('Delivered / completed', (r) {
                     final v = toNumOrNull(r['delivery_rate']);
-                    return Text(pct(v), style: TextStyle(fontWeight: FontWeight.w700, color: v == null ? null : (v < 70 ? Palette.negative : (v < 85 ? Palette.warning : Palette.positive))));
+                    return Text(rate(r), style: TextStyle(fontWeight: FontWeight.w700, color: v == null ? null : (v < 70 ? Palette.negative : (v < 85 ? Palette.warning : Palette.positive))));
                   }, numeric: true, sort: 'delivery_rate'),
                   Col('Revenue', (r) => Amount(r['revenue']), numeric: true, sort: 'revenue'),
                   Col('Courier cost', (r) => Amount(r['courier_cost']), numeric: true, sort: 'courier_cost'),
@@ -73,7 +79,7 @@ class _ProfitPageState extends State<ProfitPage> {
                 ],
                 tile: (r) => ListTile(
                   title: Text(name(r), maxLines: 2),
-                  subtitle: Text('${r['orders']} orders · delivery ${pct(r['delivery_rate'])} · revenue ${rs(r['revenue'])}'),
+                  subtitle: Text('${r['orders']} orders · delivered ${rate(r)} of completed · revenue ${rs(r['revenue'])}'),
                   trailing: Amount(r['contribution'], colored: true, bold: true),
                 ),
               ),

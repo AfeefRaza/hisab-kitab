@@ -23,6 +23,22 @@ String rs(dynamic v, {bool decimals = false}) {
   return n < 0 ? '−Rs $s' : 'Rs $s';
 }
 
+/// Rounds [values] to whole rupees so they add up exactly to the rounded total
+/// (largest-remainder method) — avoids "parts sum to Rs 1 more than the total".
+List<int> roundToTotal(List<num> values) {
+  final target = values.fold<num>(0, (a, v) => a + v).round();
+  final floors = [for (final v in values) v.floor()];
+  var left = target - floors.fold<int>(0, (a, v) => a + v);
+  final order = List.generate(values.length, (i) => i)
+    ..sort((a, b) => (values[b] - floors[b]).compareTo(values[a] - floors[a]));
+  for (final i in order) {
+    if (left <= 0) break;
+    floors[i]++;
+    left--;
+  }
+  return floors;
+}
+
 /// "Rs 1.2M" for tight spaces.
 String rsCompact(dynamic v) {
   final n = toNum(v);

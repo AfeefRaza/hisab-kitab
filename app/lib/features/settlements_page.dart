@@ -25,7 +25,8 @@ class _SettlementsPageState extends State<SettlementsPage> {
   Widget build(BuildContext context) {
     return PageBody(
       title: 'Courier settlements',
-      subtitle: 'COD remittance statements from couriers, matched parcel-by-parcel and to your bank',
+      subtitle: 'COD remittance statements from couriers, matched parcel-by-parcel and to your bank. '
+          'All time — the period picker does not apply on this page.',
       actions: [
         if (AppState.session.canOperate)
           OutlinedButton.icon(
@@ -81,7 +82,7 @@ class _BatchesList extends StatelessWidget {
             KpiCard(label: 'Statements imported', value: count(active.length), icon: Icons.receipt_long),
             KpiCard(label: 'Total settled (net)', value: rs(active.fold<num>(0, (a, r) => a + toNum(r['total_net']))), icon: Icons.payments),
             KpiCard(
-              label: 'Not yet seen in bank',
+              label: 'Not matched to a bank deposit',
               value: rs(unbanked.fold<num>(0, (a, r) => a + toNum(r['total_net']) - toNum(r['matched_amount']))),
               hint: '${unbanked.length} statement(s)',
               icon: Icons.account_balance,
@@ -134,7 +135,7 @@ Widget _bankPill(Rec r) {
   if (r['voided_at'] != null) return const Pill('Voided', color: Palette.muted);
   if (r['is_banked'] == true) return Pill('In bank ${dateShort(r['banked_on'])}', color: Palette.positive);
   if (toNum(r['matched_amount']) > 0) return Pill('Part: ${rs(r['matched_amount'])}', color: Palette.warning);
-  return const Pill('Not in bank', color: Palette.negative);
+  return const Pill('Not matched', color: Palette.negative);
 }
 
 class _UnsettledView extends StatelessWidget {
@@ -158,7 +159,7 @@ class _UnsettledView extends StatelessWidget {
         const buckets = [(0, 7, '0–7 d'), (8, 14, '8–14 d'), (15, 30, '15–30 d'), (31, 100000, '30+ d')];
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           SectionCard(
-            title: 'Delivered COD still with couriers — ageing',
+            title: 'Delivered COD still with couriers — current balance, all time (ageing since delivery)',
             child: byCourier.isEmpty
                 ? const EmptyState(icon: Icons.check_circle_outline, title: 'All delivered COD is settled')
                 : DataList(
@@ -172,7 +173,7 @@ class _UnsettledView extends StatelessWidget {
                             b.$3: e.value.where((r) => age(r) >= b.$1 && age(r) <= b.$2).fold<num>(0, (a, r) => a + toNum(r['expected_cod'])),
                         },
                     ],
-                    onTap: (r) => context.go('/orders?state=with_courier&courier=${r['courier']}'),
+                    onTap: (r) => context.go('/orders?state=with_courier&courier=${r['courier']}&all=1'),
                     columns: [
                       Col('Courier', (r) => Text(courierName(r['courier']), style: const TextStyle(fontWeight: FontWeight.w700)), sort: 'courier'),
                       Col('Parcels', (r) => Text(count(r['n'])), numeric: true, sort: 'n'),

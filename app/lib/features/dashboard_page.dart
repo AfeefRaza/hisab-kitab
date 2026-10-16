@@ -76,7 +76,9 @@ class DashboardPage extends StatelessWidget {
               KpiCard(
                 label: 'Cash still with couriers',
                 value: rs(toNum(states['with_courier']?['amount']) + toNum(states['settled_unbanked']?['amount'])),
-                hint: 'Delivered but not yet in your bank',
+                hint: cash['bank_until'] == null
+                    ? 'Orders in this period, delivery confirmed, not yet matched to a bank deposit (no bank data imported)'
+                    : 'Orders in this period, delivery confirmed, not yet matched to a bank deposit',
                 icon: Icons.account_balance_wallet_outlined,
                 color: MoneyState.withCourier.color,
                 onTap: () => context.go('/settlements'),
@@ -122,9 +124,13 @@ class DashboardPage extends StatelessWidget {
                 onTap: () => context.go('/alerts'),
               ),
               KpiCard(
-                label: 'Settled, awaiting bank',
+                label: cash['bank_until'] == null ? 'Courier payouts, bank unverified' : 'Settled, awaiting bank',
                 value: rs(cash['unbanked_amount']),
-                hint: '${cash['unbanked_batches']} courier statement(s) not matched to a deposit',
+                hint: cash['bank_until'] == null
+                    ? 'All time · ${cash['unbanked_batches']} statement(s). No bank statement imported, so deposits '
+                        'can\'t be confirmed yet — import one under Bank'
+                    : 'All time · ${cash['unbanked_batches']} courier statement(s) not matched to a deposit '
+                        '(bank data up to ${dateShort(cash['bank_until'])})',
                 icon: Icons.receipt_long_outlined,
                 color: MoneyState.settledUnbanked.color,
                 onTap: () => context.go('/bank'),

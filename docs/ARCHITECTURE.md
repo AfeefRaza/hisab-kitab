@@ -64,6 +64,17 @@ Every order is in exactly one state (`v_order_finance.money_state`):
 | `lost` | Lost by courier | claim |
 | `cancelled` | Cancelled before delivery | none |
 
+**What counts as delivered** (revenue and COD receivable are recognised only then):
+an explicit delivered courier event ("Delivered to Customer" — never "Waiting for Delivery",
+"Enroute for Delivery", attempts or reviews), a manual override, or a statement line whose own
+courier status says delivered. A PostEx CPR line alone is *not* proof: PostEx pays some COD
+upfront while the parcel is still at its warehouse and claws it back on return
+(those surface as "Settled but returned" alerts). Delivered parcels not yet paid for are
+re-tracked every 3 days for 45 days so a late return reverses the revenue.
+
+A deposit is reported **missing** only when imported bank statements cover the payout's
+arrival window; otherwise the payout is **unverified** (one "Bank data missing" alert).
+
 ## Profit formula (per order, recognised when final)
 
 ```

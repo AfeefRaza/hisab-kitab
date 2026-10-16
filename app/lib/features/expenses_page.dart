@@ -89,14 +89,16 @@ class _EntriesView extends StatelessWidget {
         final (rows, byCat) = data;
         final total = byCat.fold<num>(0, (a, r) => a + toNum(r['amount']));
         byCat.sort((a, b) => toNum(b['amount']).compareTo(toNum(a['amount'])));
+        // Display amounts rounded so the categories add up to the total shown
+        final shown = roundToTotal([for (final c in byCat) toNum(c['amount'])]);
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           SectionCard(
             title: 'By category (allocated to ${AppState.period.label.toLowerCase()})',
-            trailing: Text(rs(total), style: const TextStyle(fontWeight: FontWeight.w800)),
+            trailing: Text(rs(shown.fold<int>(0, (a, v) => a + v)), style: const TextStyle(fontWeight: FontWeight.w800)),
             child: byCat.isEmpty
                 ? const Text('No expenses in this period')
                 : Column(children: [
-                    for (final c in byCat)
+                    for (final (i, c) in byCat.indexed)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(children: [
@@ -112,7 +114,7 @@ class _EntriesView extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          SizedBox(width: 110, child: Align(alignment: Alignment.centerRight, child: Amount(c['amount'], bold: true))),
+                          SizedBox(width: 110, child: Align(alignment: Alignment.centerRight, child: Amount(shown[i], bold: true))),
                         ]),
                       ),
                     const SizedBox(height: 8),

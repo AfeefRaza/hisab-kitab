@@ -11,9 +11,12 @@ import '../ui/widgets.dart';
 import 'csv_export.dart';
 
 class OrdersPage extends StatefulWidget {
-  const OrdersPage({super.key, this.initialState, this.initialCourier});
+  const OrdersPage({super.key, this.initialState, this.initialCourier, this.allTime = false});
   final String? initialState;
   final String? initialCourier;
+
+  /// Ignore the global period (drilldowns from all-time balances keep their population).
+  final bool allTime;
 
   @override
   State<OrdersPage> createState() => _OrdersPageState();
@@ -23,6 +26,7 @@ class _OrdersPageState extends State<OrdersPage> {
   static const _pageSize = 50;
   late String? _state = widget.initialState;
   late String? _courier = widget.initialCourier;
+  late bool _allTime = widget.allTime;
   String? _parcel;
   bool? _cod;
   final _search = TextEditingController();
@@ -36,9 +40,10 @@ class _OrdersPageState extends State<OrdersPage> {
   @override
   void didUpdateWidget(OrdersPage old) {
     super.didUpdateWidget(old);
-    if (old.initialState != widget.initialState || old.initialCourier != widget.initialCourier) {
+    if (old.initialState != widget.initialState || old.initialCourier != widget.initialCourier || old.allTime != widget.allTime) {
       _state = widget.initialState;
       _courier = widget.initialCourier;
+      _allTime = widget.allTime;
       _page = 0;
       _version++;
     }
@@ -55,8 +60,10 @@ class _OrdersPageState extends State<OrdersPage> {
   bool get _hasFilters =>
       _state != null || _courier != null || _parcel != null || _cod != null || _search.text.isNotEmpty || _city.text.isNotEmpty;
 
+  DateTimeRange get _range => _allTime ? DateTimeRange(start: DateTime(2000), end: DateTime.now()) : AppState.period.value;
+
   Future<({List<Rec> rows, int total})> _query({int page = 0, int pageSize = _pageSize}) {
-    final p = AppState.period.value;
+    final p = _range;
     return Api.instance.orders(
       from: p.start,
       to: p.end,
@@ -85,7 +92,7 @@ class _OrdersPageState extends State<OrdersPage> {
   }
 
   Future<void> _export() async {
-    final p = AppState.period.value;
+    final p = _range;
     final all = <Rec>[];
     for (var page = 0; page < 200; page++) {
       final r = await _query(page: page, pageSize: 1000);
@@ -162,11 +169,19 @@ class _OrdersPageState extends State<OrdersPage> {
               items: const {true: 'Cash on delivery', false: 'Prepaid'},
               onChanged: (v) => _refilter(() => _cod = v),
             ),
+            if (_allTime)
+              InputChip(
+                avatar: const Icon(Icons.all_inclusive, size: 18),
+                label: const Text('All time — period picker ignored'),
+                tooltip: 'Opened from an all-time balance. Remove to use the selected period.',
+                onDeleted: () => _refilter(() => _allTime = false),
+              ),
             if (_hasFilters)
               TextButton.icon(
                 onPressed: () => _refilter(() {
                   _state = _courier = _parcel = null;
                   _cod = null;
+                  _allTime = false;
                   _search.clear();
                   _city.clear();
                 }),

@@ -44,7 +44,8 @@ insert into public.orders (id, name, created_at_shop, updated_at_shop, cancelled
   (9000004, '#T4', '2020-01-06 12:00+05', now(), null, true, 1000, 1000, 'Multan'),
   (9000005, '#T5', '2020-01-07 10:00+05', now(), '2020-01-07 12:00+05', true, 1200, 1200, 'Multan'),
   (9000006, '#T6', '2020-01-07 15:00+05', now(), null, true, 2600, 2600, 'Karachi'),
-  (9000007, '#T7', '2020-01-08 09:00+05', now(), null, true, 1800, 1800, 'Quetta');
+  (9000007, '#T7', '2020-01-08 09:00+05', now(), null, true, 1800, 1800, 'Quetta'),
+  (9000008, '#T8', '2020-01-08 10:00+05', now(), null, true, 2200, 2200, 'Lahore');
 
 insert into public.order_lines (id, order_id, title, quantity, current_quantity, unit_price, unit_cost) values
   (1, 9000001, 'Black Hoodie', 1, 1, 3000, 1000),
@@ -60,7 +61,9 @@ insert into public.shipments (order_id, tracking_number, courier, fulfilled_at, 
   (9000002, '22000000000002', 'postex', '2020-01-05 18:00+05', 'delivered', '2020-01-08 12:00+05', '2020-01-08 12:00+05', null, true),
   (9000003, '50300000003', 'blueex', '2020-01-06 18:00+05', 'returned', '2020-01-12 12:00+05', null, '2020-01-12 12:00+05', true),
   (9000006, '55900000006', 'mnp', '2020-01-07 18:00+05', 'delivered', '2020-01-09 12:00+05', '2020-01-09 12:00+05', null, true),
-  (9000007, 'T00000007', 'tranzo', now() - interval '10 days', 'in_transit', now() - interval '10 days', null, null, false);
+  (9000007, 'T00000007', 'tranzo', now() - interval '10 days', 'in_transit', now() - interval '10 days', null, null, false),
+  (9000008, '22000000000008', 'postex', now() - interval '2 days', 'in_transit', now() - interval '1 day', null, null, false);
+update public.shipments set status_raw = 'Waiting for Delivery' where tracking_number = '22000000000008';
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated","email":"test-admin@example.com"}';
@@ -86,6 +89,10 @@ select public.import_bank_statement(
   (select id from public.bank_accounts where name = 'Test Meezan'), 'stmt.csv', 'sha-bank-1',
   '[{"date":"2020-01-14","description":"IBFT POSTEX PVT LTD","credit":2750,"balance":10000},
     {"date":"2020-01-14","description":"Office rent","debit":500,"balance":9500}]'::jsonb);
+-- A later statement so bank data covers the M&P payout window: only then is its deposit "missing"
+select public.import_bank_statement(
+  (select id from public.bank_accounts where name = 'Test Meezan'), 'stmt-2.csv', 'sha-bank-2',
+  jsonb_build_array(jsonb_build_object('date', current_date, 'description', 'Bank charges', 'debit', 10, 'balance', 9490)));
 
 -- Marketing expense in window
 insert into public.expenses (expense_date, category_id, amount)
@@ -153,8 +160,13 @@ begin
     raise exception 'FAIL missing settlement_overdue alert for O2'; end if;
   if not exists (select 1 from public.alerts where kind = 'cod_mismatch' and entity_id = '9000006' and amount = -100) then
     raise exception 'FAIL missing cod_mismatch alert for O6'; end if;
-  if not exists (select 1 from public.alerts where kind = 'bank_deposit_missing' and status = 'open') then
-    raise exception 'FAIL missing bank_deposit_missing alert'; end if;
+  -- bank data now covers the M&P payout window, so its deposit is "missing" (not merely unverified)
+  if not exists (select 1 from public.alerts a join public.settlement_batches b on b.id::text = a.entity_id
+                 where a.kind = 'bank_deposit_missing' and a.status = 'open' and b.statement_ref = 'MNP-1') then
+    raise exception 'FAIL missing bank_deposit_missing alert for the M&P batch'; end if;
+  -- audit C1: "Waiting for Delivery" is not a delivery
+  select money_state into st from public.v_order_profit where order_id = 9000008;
+  if st <> 'in_transit' then raise exception 'FAIL O8 (waiting for delivery) state %, expected in_transit', st; end if;
   if not exists (select 1 from public.alerts where kind = 'stuck_shipment' and entity_id = '9000007') then
     raise exception 'FAIL missing stuck_shipment alert for O7'; end if;
   if exists (select 1 from public.alerts where entity_id = '9000001' and status = 'open') then

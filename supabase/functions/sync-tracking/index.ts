@@ -1,5 +1,5 @@
-// Courier tracking sync. Only checks shipments that are not final and are due
-// (next_check_at <= now), so delivered/returned parcels are never re-tracked.
+// Courier tracking sync. Checks shipments that are not final and are due
+// (next_check_at <= now), plus recently delivered parcels not yet paid for.
 // Auth: finance+ user JWT, or pg_cron via x-cron-secret.
 import { authenticate, handle, json, resolveStore, storeClient } from "../_shared/http.ts";
 import { type Courier, FINAL_STATUSES, trackMany, type TrackResult } from "../_shared/couriers.ts";
@@ -27,11 +27,23 @@ Deno.serve(handle(async (req) => {
   } else {
     q = q.eq("is_final", false).lte("next_check_at", new Date().toISOString()).order("next_check_at");
   }
-  const { data: due, error } = await q;
+  const { data: dueMain, error } = await q;
   if (error) throw new Error(error.message);
+  const due = dueMain ?? [];
+  if (!body.shipment_ids?.length) {
+    // Terminal-state audit: a "delivered" parcel the courier hasn't paid for yet is
+    // re-checked every 3 days (for 45 days), so a later return/correction is picked up.
+    const { data: recheck } = await db.from("shipments").select("id, tracking_number, courier")
+      .eq("store_id", storeId).eq("is_final", true).eq("status", "delivered").eq("payment_complete", false)
+      .lt("last_checked_at", new Date(Date.now() - 3 * 86400_000).toISOString())
+      .gt("status_at", new Date(Date.now() - 45 * 86400_000).toISOString())
+      .order("last_checked_at").limit(150);
+    const seen = new Set(due.map((s) => s.id));
+    for (const s of recheck ?? []) if (!seen.has(s.id)) due.push(s);
+  }
 
   const byCourier = new Map<Courier, { id: number; tracking_number: string }[]>();
-  for (const s of due ?? []) {
+  for (const s of due) {
     const list = byCourier.get(s.courier as Courier) ?? [];
     list.push(s);
     byCourier.set(s.courier as Courier, list);
@@ -86,10 +98,10 @@ Deno.serve(handle(async (req) => {
   }
 
   const totalErr = Object.values(perCourier).reduce((a, b) => a + b.errors, 0);
-  const stats = { due: due?.length ?? 0, applied, events: events.length, couriers: perCourier };
+  const stats = { due: due.length, applied, events: events.length, couriers: perCourier };
   await db.from("sync_runs").update({
     finished_at: new Date().toISOString(),
-    status: totalErr === 0 ? "ok" : (totalErr < (due?.length ?? 0) ? "partial" : "error"),
+    status: totalErr === 0 ? "ok" : (totalErr < due.length ? "partial" : "error"),
     stats,
     error: totalErr ? `${totalErr} parcel(s) could not be tracked` : null,
   }).eq("id", run?.id);

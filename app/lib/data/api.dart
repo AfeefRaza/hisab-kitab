@@ -389,8 +389,17 @@ class Api {
       .limit(500));
 
   // ---------------------------------------------------------------- integrations
-  Future<List<Rec>> integrations() async =>
-      _rows(await _db.from('integrations').select().order('kind', ascending: false).order('display_name'));
+  /// Integrations, with each courier's parcel count so "connected but never synced"
+  /// can be told apart from "connected, no parcels booked with this courier".
+  Future<List<Rec>> integrations() async {
+    final rows = _rows(await _db.from('integrations').select().order('kind', ascending: false).order('display_name'));
+    await Future.wait([
+      for (final r in rows.where((r) => r['kind'] == 'courier'))
+        _db.from('shipments').select('id').eq('courier', r['provider']).limit(1).count(CountOption.exact)
+            .then((res) => r['parcels'] = res.count),
+    ]);
+    return rows;
+  }
 
   Future<Rec> integrationAction(String action, String provider,
       {Map<String, String>? config, Map<String, String>? credentials, String? sampleTracking}) async {
