@@ -1,18 +1,19 @@
 // Daily ad spend per channel from Triple Whale → automatic marketing expenses.
 // Default: refresh the last 3 days (PKT). Body { from: 'YYYY-MM-DD' } backfills (max 400 days).
 // Auth: finance+ user JWT, or pg_cron via x-cron-secret.
-import { authenticate, handle, HttpError, json, mapWithConcurrency, serviceClient } from "../_shared/http.ts";
+import { authenticate, handle, HttpError, json, mapWithConcurrency, resolveStore, storeClient } from "../_shared/http.ts";
 import { AD_CHANNELS, fetchDaySpend } from "../_shared/triplewhale.ts";
 
 const pktDay = (offsetDays = 0) => new Date(Date.now() + 5 * 3600_000 + offsetDays * 86400_000).toISOString().slice(0, 10);
 
 Deno.serve(handle(async (req) => {
   const started = Date.now();
-  const db = serviceClient();
+  const body = await req.json().catch(() => ({})) as { from?: string; to?: string; store_id?: string };
+  const storeId = await resolveStore(req, body);
+  const db = storeClient(storeId);
   const caller = await authenticate(req, db, "finance");
-  const body = await req.json().catch(() => ({})) as { from?: string; to?: string };
 
-  const { data: integ } = await db.from("integrations").select("config, enabled").eq("provider", "triplewhale").single();
+  const { data: integ } = await db.from("integrations").select("config, enabled").eq("store_id", storeId).eq("provider", "triplewhale").single();
   const { data: secret } = await db.rpc("integration_get_secret", { p_provider: "triplewhale" });
   if (!integ?.enabled || !secret?.api_key || !integ.config?.shop_domain) {
     if (caller.kind === "cron") return json(req, { skipped: "Triple Whale not connected" });
@@ -28,7 +29,7 @@ Deno.serve(handle(async (req) => {
   for (let d = Date.parse(from); d <= Date.parse(to); d += 86400_000) days.push(new Date(d).toISOString().slice(0, 10));
 
   const { data: run } = await db.from("sync_runs")
-    .insert({ kind: "adspend", trigger: caller.kind === "cron" ? "cron" : "manual" })
+    .insert({ store_id: storeId, kind: "adspend", trigger: caller.kind === "cron" ? "cron" : "manual" })
     .select("id").single();
 
   const rows: { day: string; channel: string; amount: number }[] = [];
@@ -52,7 +53,7 @@ Deno.serve(handle(async (req) => {
     const { data, error } = await db.rpc("apply_ad_spend", { p_rows: rows });
     if (error) throw new Error(`Saving ad spend failed: ${error.message}`);
     applied = data;
-    await db.from("integrations").update({ last_sync_at: new Date().toISOString() }).eq("provider", "triplewhale");
+    await db.from("integrations").update({ last_sync_at: new Date().toISOString() }).eq("store_id", storeId).eq("provider", "triplewhale");
   }
 
   const total = rows.reduce((a, r) => a + r.amount, 0);

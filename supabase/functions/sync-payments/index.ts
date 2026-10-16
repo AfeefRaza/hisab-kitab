@@ -3,7 +3,7 @@
 // stores the raw responses, then builds settlement batches (one per CPR) in SQL.
 // Currently PostEx (the only courier with a payment-status API).
 // Auth: finance+ user JWT, or pg_cron via x-cron-secret.
-import { authenticate, chunk, handle, json, mapWithConcurrency, serviceClient } from "../_shared/http.ts";
+import { authenticate, chunk, handle, json, mapWithConcurrency, resolveStore, storeClient } from "../_shared/http.ts";
 
 const BATCH_LIMIT = 400;
 const POSTEX = "https://api.postex.pk/services/integration/api/order";
@@ -35,19 +35,20 @@ function pickFin(dist: any): Record<string, unknown> | null {
 }
 
 Deno.serve(handle(async (req) => {
-  const db = serviceClient();
+  const body = await req.json().catch(() => ({})) as { shipment_ids?: number[]; store_id?: string };
+  const storeId = await resolveStore(req, body);
+  const db = storeClient(storeId);
   const caller = await authenticate(req, db, "finance");
-  const body = await req.json().catch(() => ({})) as { shipment_ids?: number[] };
 
   const { data: secret } = await db.rpc("integration_get_secret", { p_provider: "postex" });
   if (!secret?.token) return json(req, { skipped: "PostEx not connected" });
   const token = secret.token as string;
 
   const { data: run } = await db.from("sync_runs")
-    .insert({ kind: "payments", trigger: caller.kind === "cron" ? "cron" : "manual" })
+    .insert({ store_id: storeId, kind: "payments", trigger: caller.kind === "cron" ? "cron" : "manual" })
     .select("id").single();
 
-  let q = db.from("shipments").select("id, tracking_number, courier_financials").eq("courier", "postex").limit(BATCH_LIMIT);
+  let q = db.from("shipments").select("id, tracking_number, courier_financials").eq("store_id", storeId).eq("courier", "postex").limit(BATCH_LIMIT);
   if (body.shipment_ids?.length) {
     q = q.in("id", body.shipment_ids.slice(0, BATCH_LIMIT));
   } else {

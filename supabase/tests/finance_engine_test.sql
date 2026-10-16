@@ -20,6 +20,9 @@
 -- =====================================================================
 begin;
 
+-- Run as the original store (multi-store: every table, view and RPC is scoped by x-store-id)
+select set_config('request.headers', '{"x-store-id": "b1a5e000-0000-4000-8000-000000000001"}', true);
+
 -- Deterministic fixtures: the test's own rate cards and settings (rolled back at the end)
 update public.courier_rate_cards set delivery_charge = 200, return_charge = 100, cod_fee_percent = 0, cod_tax_percent = 0;
 update public.app_settings set value = '{"flyer_per_parcel": 5, "polybag_per_unit": 10}' where key = 'packaging';

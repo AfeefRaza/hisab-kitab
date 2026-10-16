@@ -1,7 +1,7 @@
 // Courier tracking sync. Only checks shipments that are not final and are due
 // (next_check_at <= now), so delivered/returned parcels are never re-tracked.
 // Auth: finance+ user JWT, or pg_cron via x-cron-secret.
-import { authenticate, handle, json, serviceClient } from "../_shared/http.ts";
+import { authenticate, handle, json, resolveStore, storeClient } from "../_shared/http.ts";
 import { type Courier, FINAL_STATUSES, trackMany, type TrackResult } from "../_shared/couriers.ts";
 
 const BATCH_LIMIT = 600;
@@ -12,15 +12,16 @@ const NEXT_CHECK_MINUTES: Record<string, number> = {
 };
 
 Deno.serve(handle(async (req) => {
-  const db = serviceClient();
+  const body = await req.json().catch(() => ({})) as { shipment_ids?: number[]; store_id?: string };
+  const storeId = await resolveStore(req, body);
+  const db = storeClient(storeId);
   const caller = await authenticate(req, db, "finance");
-  const body = await req.json().catch(() => ({})) as { shipment_ids?: number[] };
 
   const { data: run } = await db.from("sync_runs")
-    .insert({ kind: "tracking", trigger: caller.kind === "cron" ? "cron" : "manual" })
+    .insert({ store_id: storeId, kind: "tracking", trigger: caller.kind === "cron" ? "cron" : "manual" })
     .select("id").single();
 
-  let q = db.from("shipments").select("id, tracking_number, courier").limit(BATCH_LIMIT);
+  let q = db.from("shipments").select("id, tracking_number, courier").eq("store_id", storeId).limit(BATCH_LIMIT);
   if (body.shipment_ids?.length) {
     q = q.in("id", body.shipment_ids.slice(0, BATCH_LIMIT));
   } else {
@@ -80,7 +81,7 @@ Deno.serve(handle(async (req) => {
   await db.rpc("refresh_alerts");
   for (const c of Object.keys(perCourier)) {
     if (perCourier[c].ok > 0) {
-      await db.from("integrations").update({ last_sync_at: new Date().toISOString() }).eq("provider", c);
+      await db.from("integrations").update({ last_sync_at: new Date().toISOString() }).eq("store_id", storeId).eq("provider", c);
     }
   }
 

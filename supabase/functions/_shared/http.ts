@@ -9,7 +9,7 @@ export function corsHeaders(req: Request): Record<string, string> {
   const allowOrigin = allowed.includes("*") ? "*" : (allowed.includes(origin) ? origin : allowed[0]);
   return {
     "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret, x-store-id",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
@@ -26,6 +26,29 @@ export function serviceClient(): SupabaseClient {
   return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+/**
+ * Service client scoped to one store: every request carries x-store-id, so
+ * public.current_store_id() resolves inside RPCs and column defaults.
+ * Service role bypasses RLS, so table reads must still filter on store_id.
+ */
+export function storeClient(storeId: string): SupabaseClient {
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { "x-store-id": storeId } },
+  });
+}
+
+/** The store this request is for: x-store-id header (app) or body.store_id (cron). */
+export async function resolveStore(req: Request, body: { store_id?: string } | null): Promise<string> {
+  const id = req.headers.get("x-store-id") ?? body?.store_id ?? "";
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    throw new HttpError(400, "No store selected");
+  }
+  const { data } = await serviceClient().from("stores").select("id").eq("id", id).maybeSingle();
+  if (!data) throw new HttpError(400, "Unknown store");
+  return id;
 }
 
 export type Caller =

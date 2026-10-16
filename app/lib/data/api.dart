@@ -22,6 +22,13 @@ class Api {
     return await _db.from('profiles').select().eq('id', uid).maybeSingle();
   }
 
+  // ---------------------------------------------------------------- stores
+  Future<List<Rec>> stores() async => _rows(await _db.from('stores').select('id,name,created_at').order('created_at'));
+
+  Future<String> createStore(String name) async => (await _db.rpc('create_store', params: {'p_name': name})) as String;
+
+  Future<void> renameStore(String id, String name) => _db.rpc('rename_store', params: {'p_id': id, 'p_name': name});
+
   // ---------------------------------------------------------------- finance
   Future<Rec> financeSummary(DateTime from, DateTime to) async =>
       (await _db.rpc('finance_summary', params: {'p_from': ymd(from), 'p_to': ymd(to)})) as Rec;

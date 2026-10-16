@@ -43,17 +43,24 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    _loadAlerts();
     AppState.dataVersion.addListener(_loadAlerts);
+    AppState.store.addListener(_onStore);
+    AppState.store.ensureLoaded().then((_) => _loadAlerts());
   }
 
   @override
   void dispose() {
     AppState.dataVersion.removeListener(_loadAlerts);
+    AppState.store.removeListener(_onStore);
     super.dispose();
   }
 
+  void _onStore() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _loadAlerts() async {
+    if (!AppState.store.ready) return;
     try {
       final n = await Api.instance.openAlertCount();
       if (mounted) setState(() => _alerts = n);
@@ -80,6 +87,19 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final store = AppState.store;
+    final Widget body = store.ready
+        // Keyed by store so every page reloads from scratch on a switch
+        ? KeyedSubtree(key: ValueKey(store.currentId), child: widget.child)
+        : Center(
+            child: store.error == null
+                ? const CircularProgressIndicator()
+                : Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text('Could not load stores: ${store.error}'),
+                    const SizedBox(height: 12),
+                    FilledButton(onPressed: store.load, child: const Text('Retry')),
+                  ]),
+          );
     final wide = isWide(context);
     final title = _destinations[_index].label;
     final appBar = AppBar(
@@ -92,6 +112,7 @@ class _AppShellState extends State<AppShell> {
           Text(title),
       ]),
       actions: [
+        if (wide) const StoreSwitcher(),
         if (wide) const PeriodButton() else const PeriodButton(compact: true),
         IconButton(tooltip: 'Search (orders, tracking, settlements, bank)', icon: const Icon(Icons.search), onPressed: () => openSearch(context)),
         if (AppState.session.canOperate)
@@ -114,7 +135,7 @@ class _AppShellState extends State<AppShell> {
             ],
           ),
           const VerticalDivider(width: 1),
-          Expanded(child: widget.child),
+          Expanded(child: body),
         ]),
       );
     }
@@ -135,10 +156,132 @@ class _AppShellState extends State<AppShell> {
               Text('Hisab Kitab', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             ]),
           ),
+          const Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 8), child: StoreSwitcher(expanded: true)),
+          const Divider(indent: 16, endIndent: 16),
           for (final d in _destinations) NavigationDrawerDestination(icon: _icon(d), label: Text(d.label)),
         ],
       ),
-      body: widget.child,
+      body: body,
+    );
+  }
+}
+
+/// Shows the current store; switches stores and (admins) opens store management.
+class StoreSwitcher extends StatelessWidget {
+  const StoreSwitcher({super.key, this.expanded = false});
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final st = AppState.store;
+    return ListenableBuilder(
+      listenable: st,
+      builder: (context, _) {
+        final label = Row(mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min, children: [
+          const Icon(Icons.storefront_outlined, size: 20),
+          const SizedBox(width: 8),
+          Flexible(
+            fit: expanded ? FlexFit.tight : FlexFit.loose,
+            child: Text(st.currentName.isEmpty ? 'Store' : st.currentName,
+                overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          const Icon(Icons.arrow_drop_down),
+        ]);
+        return PopupMenuButton<String>(
+          tooltip: 'Switch store',
+          onSelected: (v) async {
+            if (v == '__manage') {
+              await showDialog(context: context, builder: (_) => const ManageStoresDialog());
+              return;
+            }
+            final router = GoRouter.of(context);
+            if (expanded) Navigator.of(context).maybePop(); // close the drawer
+            await st.select(v);
+            router.go('/');
+          },
+          itemBuilder: (_) => [
+            for (final s in st.stores)
+              CheckedPopupMenuItem(value: s['id'] as String, checked: s['id'] == st.currentId, child: Text('${s['name']}')),
+            if (AppState.session.isAdmin) ...[
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: '__manage',
+                child: ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: Icon(Icons.edit_outlined), title: Text('Manage stores…')),
+              ),
+            ],
+          ],
+          child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), child: label),
+        );
+      },
+    );
+  }
+}
+
+/// Admin: add and rename stores. A new store starts with no data and its own
+/// integrations to connect; categories, rate cards and settings are copied as defaults.
+class ManageStoresDialog extends StatefulWidget {
+  const ManageStoresDialog({super.key});
+
+  @override
+  State<ManageStoresDialog> createState() => _ManageStoresDialogState();
+}
+
+class _ManageStoresDialogState extends State<ManageStoresDialog> {
+  Future<void> _add() async {
+    final name = await promptText(context, 'New store', label: 'Store name', required: true);
+    if (name == null || name.isEmpty || !mounted) return;
+    String? id;
+    final ok = await runAction(context, () async {
+      id = await Api.instance.createStore(name);
+      await AppState.store.load();
+    }, success: 'Store "$name" created');
+    if (!ok || id == null || !mounted) return;
+    final go = await confirm(context, 'Switch to $name?',
+        'Open the new store now and connect its Shopify, couriers and Triple Whale under Integrations.',
+        action: 'Switch & connect');
+    if (!go || !mounted) return;
+    final router = GoRouter.of(context);
+    Navigator.pop(context);
+    await AppState.store.select(id!);
+    router.go('/integrations');
+  }
+
+  Future<void> _rename(Rec s) async {
+    final name = await promptText(context, 'Rename store', label: 'Store name', initial: '${s['name']}', required: true);
+    if (name == null || name.isEmpty || !mounted) return;
+    await runAction(context, () async {
+      await Api.instance.renameStore(s['id'] as String, name);
+      await AppState.store.load();
+    }, success: 'Renamed');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Stores'),
+      content: SizedBox(
+        width: 420,
+        child: ListenableBuilder(
+          listenable: AppState.store,
+          builder: (_, _) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Each store has its own Shopify shop, courier and Triple Whale connections, orders, settlements, '
+                'bank statements, expenses and settings. Users and roles are shared.'),
+            const SizedBox(height: 12),
+            for (final s in AppState.store.stores)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(s['id'] == AppState.store.currentId ? Icons.check_circle : Icons.storefront_outlined),
+                title: Text('${s['name']}'),
+                subtitle: Text('Created ${dateShort(s['created_at'])}'),
+                trailing: IconButton(tooltip: 'Rename', icon: const Icon(Icons.edit_outlined), onPressed: () => _rename(s)),
+              ),
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('Add store')),
+      ],
     );
   }
 }

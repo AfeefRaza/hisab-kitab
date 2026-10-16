@@ -2,7 +2,7 @@
 // Orders are fetched oldest-updated first, so the saved cursor (last processed
 // updated_at) is always a safe resume point, even when a run hits its time budget.
 // Auth: finance+ user JWT, or pg_cron via x-cron-secret.
-import { authenticate, handle, HttpError, json, serviceClient } from "../_shared/http.ts";
+import { authenticate, handle, HttpError, json, resolveStore, storeClient } from "../_shared/http.ts";
 import { detectCourier } from "../_shared/couriers.ts";
 import { mapOrder, ORDERS_QUERY, ORDERS_QUERY_NO_PII, ShopifyClient } from "../_shared/shopify.ts";
 
@@ -11,21 +11,22 @@ const DEFAULT_LOOKBACK_DAYS = 90;
 
 Deno.serve(handle(async (req) => {
   const started = Date.now();
-  const db = serviceClient();
+  const body = await req.json().catch(() => ({})) as { from?: string; store_id?: string };
+  const storeId = await resolveStore(req, body);
+  const db = storeClient(storeId);
   const caller = await authenticate(req, db, "finance");
-  const body = await req.json().catch(() => ({})) as { from?: string };
 
-  const { data: integ } = await db.from("integrations").select("config, enabled").eq("provider", "shopify").single();
+  const { data: integ } = await db.from("integrations").select("config, enabled").eq("store_id", storeId).eq("provider", "shopify").single();
   const { data: secret } = await db.rpc("integration_get_secret", { p_provider: "shopify" });
   if (!integ?.enabled || !secret) throw new HttpError(400, "Shopify is not connected. Open Settings → Integrations.");
 
   const client = new ShopifyClient(integ.config, secret);
 
   const { data: run } = await db.from("sync_runs")
-    .insert({ kind: "orders", trigger: caller.kind === "cron" ? "cron" : "manual" })
+    .insert({ store_id: storeId, kind: "orders", trigger: caller.kind === "cron" ? "cron" : "manual" })
     .select("id").single();
 
-  const { data: state } = await db.from("sync_state").select("value").eq("key", "orders_cursor").maybeSingle();
+  const { data: state } = await db.from("sync_state").select("value").eq("store_id", storeId).eq("key", "orders_cursor").maybeSingle();
   let since: string;
   if (body.from && /^\d{4}-\d{2}-\d{2}$/.test(body.from)) {
     since = new Date(`${body.from}T00:00:00+05:00`).toISOString();
@@ -63,10 +64,10 @@ Deno.serve(handle(async (req) => {
       pages++;
 
       if (mapped.length > 0) {
-        const { error: oErr } = await db.from("orders").upsert(mapped.map((m) => m.order), { onConflict: "id" });
+        const { error: oErr } = await db.from("orders").upsert(mapped.map((m) => ({ ...m.order, store_id: storeId })), { onConflict: "id" });
         if (oErr) throw new Error(`Saving orders failed: ${oErr.message}`);
 
-        const lines = mapped.flatMap((m) => m.lines).filter((l) => l.id != null);
+        const lines = mapped.flatMap((m) => m.lines).filter((l) => l.id != null).map((l) => ({ ...l, store_id: storeId }));
         if (lines.length) {
           const { error: lErr } = await db.from("order_lines").upsert(lines, { onConflict: "id" });
           if (lErr) throw new Error(`Saving order lines failed: ${lErr.message}`);
@@ -74,6 +75,7 @@ Deno.serve(handle(async (req) => {
 
         const shipments = mapped.flatMap((m) =>
           m.shipments.map((s) => ({
+            store_id: storeId,
             order_id: m.order.id,
             tracking_number: s.tracking_number,
             courier: detectCourier(s.tracking_number, s.company),
@@ -84,7 +86,7 @@ Deno.serve(handle(async (req) => {
         );
         if (shipments.length) {
           // Only fulfilment columns are written; courier status columns are untouched on conflict.
-          const { error: sErr } = await db.from("shipments").upsert(shipments, { onConflict: "tracking_number" });
+          const { error: sErr } = await db.from("shipments").upsert(shipments, { onConflict: "store_id,tracking_number" });
           if (sErr) throw new Error(`Saving shipments failed: ${sErr.message}`);
         }
 
@@ -101,11 +103,14 @@ Deno.serve(handle(async (req) => {
   }
 
   if (lastUpdated) {
-    await db.from("sync_state").upsert({ key: "orders_cursor", value: { updated_at: lastUpdated }, updated_at: new Date().toISOString() });
+    await db.from("sync_state").upsert(
+      { store_id: storeId, key: "orders_cursor", value: { updated_at: lastUpdated }, updated_at: new Date().toISOString() },
+      { onConflict: "store_id,key" },
+    );
   }
   const finishedAll = !hasNext && !errorMsg;
   if (finishedAll) {
-    await db.from("integrations").update({ last_sync_at: new Date().toISOString() }).eq("provider", "shopify");
+    await db.from("integrations").update({ last_sync_at: new Date().toISOString() }).eq("store_id", storeId).eq("provider", "shopify");
     await db.rpc("refresh_alerts");
   }
   const stats = { orders: orderCount, shipments: shipmentCount, pages, since, has_more: hasNext && !errorMsg };

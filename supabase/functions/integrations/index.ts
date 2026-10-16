@@ -5,7 +5,7 @@
 //  - test:       tests given credentials (or the saved ones when omitted); saves nothing
 //  - save:       tests, then stores; refuses to activate credentials that fail the test
 //  - disconnect: deletes the stored secret and disables the integration
-import { authenticate, handle, HttpError, json, mask, serviceClient } from "../_shared/http.ts";
+import { authenticate, handle, HttpError, json, mask, resolveStore, storeClient } from "../_shared/http.ts";
 import { type Courier, testCourier } from "../_shared/couriers.ts";
 import { normalizeDomain, ShopifyClient } from "../_shared/shopify.ts";
 import { testTripleWhale } from "../_shared/triplewhale.ts";
@@ -58,15 +58,16 @@ async function runTest(provider: string, config: Record<string, string>, secret:
 }
 
 Deno.serve(handle(async (req) => {
-  const db = serviceClient();
+  const body = await req.json().catch(() => ({}));
+  const storeId = await resolveStore(req, body);
+  const db = storeClient(storeId);
   const caller = await authenticate(req, db, "admin");
   if (caller.kind !== "user") throw new HttpError(403, "Admin user required");
 
-  const body = await req.json().catch(() => ({}));
   const { action, provider } = body as { action: string; provider: string };
   if (!(provider in SECRET_FIELDS)) throw new HttpError(400, "Unknown provider");
 
-  const { data: row } = await db.from("integrations").select("config").eq("provider", provider).single();
+  const { data: row } = await db.from("integrations").select("config").eq("store_id", storeId).eq("provider", provider).single();
   const { data: saved } = await db.rpc("integration_get_secret", { p_provider: provider });
 
   if (action === "disconnect") {

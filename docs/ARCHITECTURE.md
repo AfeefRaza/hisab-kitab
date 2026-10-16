@@ -36,6 +36,17 @@ Design principles:
 | `integrations` | Non-secret config + masked hints + Vault secret id |
 | `alerts`, `audit_log`, `sync_runs`, `sync_state`, `profiles` | Operations, audit, sync cursor, users/roles |
 
+## Multiple stores
+
+One deployment serves several Shopify stores. `stores` lists them; every business table carries `store_id`.
+
+- The app sends the selected store as the `x-store-id` request header (store switcher in the top bar / drawer, remembered per device). `public.current_store_id()` reads it (or the `app.store_id` setting).
+- A RESTRICTIVE RLS policy on every table adds `store_id = current_store_id()`, and the finance views filter on it themselves, so SECURITY DEFINER RPCs are scoped too. No header → nothing visible.
+- Keys are per store (`app_settings`, `integrations`, `sync_state`, tracking numbers, statement hashes, categories, rate cards).
+- Integration secrets are per store in Vault (`integration:<store>:<provider>`).
+- pg_cron calls each edge function once per store (`cron_call` loops `stores`, sending `store_id`); `reconcile_all_stores()` runs reconciliation per store. Edge functions use `resolveStore()` + `storeClient()`.
+- Users and roles are shared across stores. Admins add/rename stores from the store menu → *Manage stores* (`create_store` copies categories, rate cards, cost rules and settings from the first store as defaults).
+
 ## Money states
 
 Every order is in exactly one state (`v_order_finance.money_state`):

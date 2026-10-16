@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/api.dart';
@@ -142,11 +143,67 @@ class PeriodState extends ValueNotifier<DateTimeRange> {
   }
 }
 
+/// The store (Shopify shop) being viewed. Every request carries its id in the
+/// x-store-id header; the database scopes all rows, views and RPCs to it.
+class StoreState extends ChangeNotifier {
+  static const _prefKey = 'hk_store_id';
+  List<Rec> stores = [];
+  String? currentId;
+  bool loading = false;
+  String? error;
+
+  bool get ready => currentId != null;
+  String get currentName =>
+      (stores.firstWhere((s) => s['id'] == currentId, orElse: () => const {})['name'] as String?) ?? '';
+
+  Future<void> ensureLoaded() async {
+    if (ready || loading) return;
+    await load();
+  }
+
+  Future<void> load() async {
+    loading = true;
+    error = null;
+    notifyListeners();
+    try {
+      stores = await Api.instance.stores();
+      String? saved;
+      try {
+        saved = (await SharedPreferences.getInstance()).getString(_prefKey);
+      } catch (_) {}
+      final id = stores.any((s) => s['id'] == (currentId ?? saved)) ? (currentId ?? saved) : (stores.isEmpty ? null : stores.first['id'] as String);
+      _apply(id);
+      if (id == null) error = 'No stores found';
+    } catch (e) {
+      error = e.toString();
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> select(String id) async {
+    if (id == currentId) return;
+    _apply(id);
+    try {
+      (await SharedPreferences.getInstance()).setString(_prefKey, id);
+    } catch (_) {}
+    notifyListeners();
+    AppState.dataChanged();
+  }
+
+  void _apply(String? id) {
+    currentId = id;
+    Supabase.instance.client.headers = {'x-store-id': ?id};
+  }
+}
+
 /// App-wide singletons (simple service locator; the app is small enough).
 class AppState {
   AppState._();
   static final session = SessionState();
   static final period = PeriodState();
+  static final store = StoreState();
   /// Bumped after imports/syncs so open pages reload.
   static final dataVersion = ValueNotifier<int>(0);
   static void dataChanged() => dataVersion.value++;
