@@ -163,6 +163,8 @@ export function postexStatus(raw: string | null | undefined, code?: string | nul
   const text = String(raw ?? "");
   // "Un-Assigned By Me" / "Booking Cancelled by Merchant": no shipment, no charge
   if (/un-?assigned|cancel/i.test(text)) return "cancelled";
+  // "At HavenWear Warehouse" = label made at the merchant, parcel not picked up yet
+  if (/^at .+ warehouse$/i.test(text.trim()) && !/postex/i.test(text)) return "booked";
   const fromText = normalizeStatus(text);
   if (fromText && fromText !== "unknown") return fromText;
   let fromCode = POSTEX_CODES[String(code ?? "")] ?? null;

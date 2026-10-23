@@ -24,7 +24,7 @@ begin;
 select set_config('request.headers', '{"x-store-id": "b1a5e000-0000-4000-8000-000000000001"}', true);
 
 -- Deterministic fixtures: the test's own rate cards and settings (rolled back at the end)
-update public.courier_rate_cards set delivery_charge = 200, return_charge = 100, cod_fee_percent = 0, cod_tax_percent = 0;
+update public.courier_rate_cards set delivery_charge = 200, return_charge = 100, cod_fee_percent = 0, cod_tax_percent = 0, fuel_surcharge_percent = 0;
 update public.app_settings set value = '{"flyer_per_parcel": 5, "polybag_per_unit": 10}' where key = 'packaging';
 update public.app_settings set value = '{"income_tax_percent": 0}' where key = 'tax';
 update public.app_settings set value = '{"inventory_loss_percent": 0, "count_packaging_on_return": 1}' where key = 'returns';
@@ -201,6 +201,30 @@ declare c numeric; t numeric;
 begin
   select courier_cost, cod_withholding_tax into c, t from public.v_order_finance where order_id = 9000002;
   if c <> 280 or t <> 80 then raise exception 'FAIL COD tax: cost %, tax % (expected 280 / 80)', c, t; end if;
+end $$;
+
+-- audit F6: an unpicked label is "booked" and raises a label alert; a Shopify-cancelled one is cancelled
+update public.shipments set status = 'booked', status_raw = 'At HavenWear Warehouse', fulfilled_at = now() - interval '5 days'
+where tracking_number = '22000000000008';
+update public.profiles set role = 'admin' where id = '00000000-0000-0000-0000-0000000000a1';  -- was demoted above
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+select public.refresh_alerts();
+do $$
+declare st text;
+begin
+  select money_state into st from public.v_order_profit where order_id = 9000008;
+  if st <> 'booked' then raise exception 'FAIL O8 booked state %', st; end if;
+  if not exists (select 1 from public.alerts where kind = 'label_not_picked' and entity_id = '9000008' and status = 'open') then
+    raise exception 'FAIL missing label_not_picked alert for O8'; end if;
+end $$;
+reset role;
+select public.cancel_unpicked_shipments(array['22000000000008']);
+do $$
+declare st text;
+begin
+  select money_state into st from public.v_order_profit where order_id = 9000008;
+  if st <> 'cancelled' then raise exception 'FAIL O8 should be cancelled after Shopify cancellation, got %', st; end if;
 end $$;
 
 select 'ALL FINANCE TESTS PASSED' as result;

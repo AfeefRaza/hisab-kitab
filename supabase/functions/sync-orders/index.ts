@@ -90,6 +90,13 @@ Deno.serve(handle(async (req) => {
           if (sErr) throw new Error(`Saving shipments failed: ${sErr.message}`);
         }
 
+        // Labels on fulfilments cancelled in Shopify stop counting, unless the courier shows movement
+        const cancelledTracking = mapped.flatMap((m) => m.cancelledTracking);
+        if (cancelledTracking.length) {
+          const { error: cErr } = await db.rpc("cancel_unpicked_shipments", { p_tracking: cancelledTracking });
+          if (cErr) throw new Error(`Cancelling dead labels failed: ${cErr.message}`);
+        }
+
         orderCount += mapped.length;
         shipmentCount += shipments.length;
         lastUpdated = mapped[mapped.length - 1].order.updated_at_shop as string;

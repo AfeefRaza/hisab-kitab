@@ -169,6 +169,8 @@ export interface MappedOrder {
   order: Record<string, unknown>;
   lines: Record<string, unknown>[];
   shipments: { tracking_number: string; company: string | null; fulfillment_id: number | null; fulfilled_at: string | null }[];
+  /** Tracking numbers on fulfilments that were cancelled in Shopify (and not re-used on a live one). */
+  cancelledTracking: string[];
 }
 
 export function mapOrder(n: any): MappedOrder {
@@ -221,8 +223,15 @@ export function mapOrder(n: any): MappedOrder {
   });
   const shipments: MappedOrder["shipments"] = [];
   const seen = new Set<string>();
+  const cancelled = new Set<string>();
   for (const f of n.fulfillments ?? []) {
-    if (f.status === "CANCELLED") continue;
+    if (f.status === "CANCELLED") {
+      for (const t of f.trackingInfo ?? []) {
+        const tn = String(t.number ?? "").replace(/[\s'"]+/g, "").toUpperCase();
+        if (tn) cancelled.add(tn);
+      }
+      continue;
+    }
     for (const t of f.trackingInfo ?? []) {
       const tn = String(t.number ?? "").replace(/[\s'"]+/g, "").toUpperCase();
       if (!tn || seen.has(tn)) continue;
@@ -235,5 +244,6 @@ export function mapOrder(n: any): MappedOrder {
       });
     }
   }
-  return { order, lines, shipments };
+  const cancelledTracking = [...cancelled].filter((tn) => !seen.has(tn));
+  return { order, lines, shipments, cancelledTracking };
 }

@@ -75,13 +75,19 @@ class DashboardPage extends StatelessWidget {
               ),
               KpiCard(
                 label: 'Cash still with couriers',
-                value: rs(toNum(states['with_courier']?['amount']) + toNum(states['settled_unbanked']?['amount'])),
-                hint: cash['bank_until'] == null
-                    ? 'Orders in this period, delivery confirmed, not yet matched to a bank deposit (no bank data imported)'
-                    : 'Orders in this period, delivery confirmed, not yet matched to a bank deposit',
+                value: rs(states['with_courier']?['amount']),
+                hint: 'Orders in this period, delivered, not yet in any courier payout (CPR)',
                 icon: Icons.account_balance_wallet_outlined,
                 color: MoneyState.withCourier.color,
                 onTap: () => context.go('/settlements'),
+              ),
+              KpiCard(
+                label: cash['bank_until'] == null ? 'Paid by courier, bank unverified' : 'Paid by courier, not yet in bank',
+                value: rs(states['settled_unbanked']?['amount']),
+                hint: 'Orders in this period that are in a courier payout (CPR) but not matched to a bank deposit',
+                icon: Icons.receipt_long_outlined,
+                color: MoneyState.settledUnbanked.color,
+                onTap: () => context.go('/orders?state=settled_unbanked'),
               ),
               KpiCard(
                 label: 'Delivery rate',
@@ -255,8 +261,13 @@ class _PnlCard extends StatelessWidget {
         const Divider(),
         line('Contribution', pnl['contribution'], total: true, hint: 'Includes ${rs(pnl['return_loss'])} lost on returns'),
         line('Ad spend', pnl['marketing'], minus: true, hint: 'Triple Whale + manual marketing expenses'),
-        line('Other expenses', toNum(pnl['expenses']) - toNum(pnl['marketing']), minus: true),
-        line('Tax', pnl['tax'], minus: true),
+        line('Other expenses', toNum(pnl['expenses']) - toNum(pnl['marketing']), minus: true,
+            hint: 'Salaries, rent, software, tax payments you entered as expenses…'),
+        if (toNum(pnl['courier_other']) != 0)
+          line('Courier charges, parcels outside Shopify', pnl['courier_other'], minus: true,
+              hint: 'Replacements, exchanges and manual bookings made directly with the courier (by statement date)'),
+        line('Income tax provision', pnl['tax'], minus: true,
+            hint: 'Estimated from the income tax % in Settings (0% = none); actual tax payments are under Other expenses'),
         const Divider(),
         line('Net profit', pnl['net_profit'], total: true),
       ]),

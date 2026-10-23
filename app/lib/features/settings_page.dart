@@ -294,11 +294,12 @@ class _RateCards extends StatelessWidget {
               Col('Extra on return', (r) => Amount(r['return_charge']), numeric: true),
               Col('COD fee', (r) => Text(pct(r['cod_fee_percent'], digits: 2)), numeric: true),
               Col('COD tax', (r) => Text(pct(r['cod_tax_percent'], digits: 2)), numeric: true),
+              Col('Fuel', (r) => Text(pct(r['fuel_surcharge_percent'], digits: 0)), numeric: true),
               Col('From', (r) => Text(dateShort(r['effective_from']))),
             ],
             tile: (r) => ListTile(
               title: Text(courierName(r['courier'])),
-              subtitle: Text('Delivery ${rs(r['delivery_charge'])} · return +${rs(r['return_charge'])} · COD tax ${pct(r['cod_tax_percent'], digits: 2)} · from ${dateShort(r['effective_from'])}'),
+              subtitle: Text('Delivery ${rs(r['delivery_charge'])} · return +${rs(r['return_charge'])} · fuel ${pct(r['fuel_surcharge_percent'], digits: 0)} · COD tax ${pct(r['cod_tax_percent'], digits: 2)} · from ${dateShort(r['effective_from'])}'),
             ),
           ),
         ]),
@@ -312,6 +313,7 @@ class _RateCards extends StatelessWidget {
     final ret = TextEditingController(text: '${r['return_charge'] ?? ''}');
     final fee = TextEditingController(text: '${r['cod_fee_percent'] ?? 0}');
     final tax = TextEditingController(text: '${r['cod_tax_percent'] ?? 0}');
+    final fuel = TextEditingController(text: '${r['fuel_surcharge_percent'] ?? 0}');
     var from = DateTime.tryParse('${r['effective_from']}') ?? DateTime.now();
     final res = await showDialog<String>(
       context: context,
@@ -328,13 +330,15 @@ class _RateCards extends StatelessWidget {
                 onChanged: (v) => set(() => courier = v!),
               ),
               const SizedBox(height: 12),
-              TextField(controller: del, decoration: const InputDecoration(labelText: 'Delivery charge (incl. GST/fuel)', prefixText: 'Rs ')),
+              TextField(controller: del, decoration: const InputDecoration(labelText: 'Delivery charge (incl. GST, excl. fuel surcharge)', prefixText: 'Rs ')),
               const SizedBox(height: 12),
               TextField(controller: ret, decoration: const InputDecoration(labelText: 'Additional return charge', prefixText: 'Rs ')),
               const SizedBox(height: 12),
               TextField(controller: fee, decoration: const InputDecoration(labelText: 'COD handling fee', suffixText: '% of COD')),
               const SizedBox(height: 12),
               TextField(controller: tax, decoration: const InputDecoration(labelText: 'COD withholding tax (deducted per parcel)', suffixText: '% of COD')),
+              const SizedBox(height: 12),
+              TextField(controller: fuel, decoration: const InputDecoration(labelText: 'Fuel surcharge on delivery/return charges', suffixText: '%')),
               const SizedBox(height: 12),
               OutlinedButton(
                 onPressed: () async {
@@ -365,6 +369,7 @@ class _RateCards extends StatelessWidget {
               'return_charge': num.tryParse(ret.text) ?? 0,
               'cod_fee_percent': num.tryParse(fee.text) ?? 0,
               'cod_tax_percent': num.tryParse(tax.text) ?? 0,
+              'fuel_surcharge_percent': num.tryParse(fuel.text) ?? 0,
               'effective_from': ymd(from),
             }),
             success: 'Rate saved',

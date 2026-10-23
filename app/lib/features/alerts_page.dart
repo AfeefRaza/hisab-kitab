@@ -16,6 +16,7 @@ const _kindLabels = {
   'bank_deposit_missing': 'Deposit missing in bank',
   'bank_data_missing': 'Bank data missing',
   'stuck_shipment': 'Stuck parcel',
+  'label_not_picked': 'Label not picked up',
   'courier_overcharge': 'High courier charge',
   'cancelled_but_delivered': 'Cancelled but delivered',
   'tracking_error': 'Tracking error',

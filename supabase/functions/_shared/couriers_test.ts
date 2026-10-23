@@ -70,6 +70,12 @@ Deno.test("audit C1: waiting / pending delivery is never delivered", () => {
   assertEquals(postexStatus("Returned at Merchant Warehouse", "0002"), "returned");
 });
 
+Deno.test("audit F6: a label still at the merchant is booked, not in transit", () => {
+  assertEquals(postexStatus("At HavenWear Warehouse", "0001"), "booked");
+  assertEquals(postexStatus("At PostEx Warehouse"), "in_transit");
+  assertEquals(postexStatus("Received at KHI Warehouse"), "in_transit");
+});
+
 // Real PostEx event sequences from the audit (#haven33776 / #haven33684 refused & returned, #haven33633 returning)
 const seq = (...steps: [string, string][]) => ({
   transactionStatusHistory: steps.map(([msg, at]) => ({ transactionStatusMessage: msg, updatedAt: at })),
@@ -154,6 +160,7 @@ Deno.test("mapOrder: money, lines, all tracking numbers, cancelled fulfilments s
   assertEquals(m.lines[0].unit_cost, 800);
   assertEquals(m.shipments.length, 1);
   assertEquals(m.shipments[0].tracking_number, "22085990000463");
+  assertEquals(m.cancelledTracking, ["503999"]);
 });
 
 import { parseSpend } from "./triplewhale.ts";

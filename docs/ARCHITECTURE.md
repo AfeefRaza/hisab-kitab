@@ -72,6 +72,18 @@ upfront while the parcel is still at its warehouse and claws it back on return
 (those surface as "Settled but returned" alerts). Delivered parcels not yet paid for are
 re-tracked every 3 days for 45 days so a late return reverses the revenue.
 
+**PostEx CPRs** are rebuilt on every payments sync from PostEx's own order list
+(`get-all-order`, last 60 days, or from a `from` date for a backfill), which carries each
+parcel's live status, the COD PostEx actually paid (`reservePayment` — `invoicePayment` is
+only the booked COD and stays set on returns), its weight-tier fee and its return
+(reversal) fee. A parcel is a *delivered* line only when PostEx says Delivered, a *returned*
+line (Rs 0 COD, return fees) when it says Return; stale lines are removed. Parcels booked
+directly in the PostEx portal are stored as `shipments.source = 'courier'` (no order unless
+their reference matches a Shopify order without a parcel); their charges appear in the P&L
+as "Courier charges, parcels outside Shopify". Labels still "At <merchant> Warehouse" are
+*booked*; labels on fulfilments cancelled in Shopify are auto-cancelled until the courier
+shows movement.
+
 A deposit is reported **missing** only when imported bank statements cover the payout's
 arrival window; otherwise the payout is **unverified** (one "Bank data missing" alert).
 

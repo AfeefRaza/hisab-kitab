@@ -132,7 +132,9 @@ class _IntegrationCard extends StatelessWidget {
             Icon(switch (row['kind']) { 'store' => Icons.storefront, 'marketing' => Icons.campaign_outlined, _ => Icons.local_shipping_outlined }),
             const SizedBox(width: 8),
             Expanded(child: Text('${row['display_name']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16))),
-            _statusPill('${row['status']}'),
+            row['kind'] == 'courier' && row['status'] == 'connected' && row['last_sync_at'] == null
+                ? const Pill('Never synced', color: Palette.warning)
+                : _statusPill('${row['status']}'),
           ]),
           const SizedBox(height: 8),
           for (final e in config.entries.where((e) => e.value != null && '${e.value}'.isNotEmpty))
