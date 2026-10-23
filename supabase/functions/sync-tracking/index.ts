@@ -87,7 +87,11 @@ Deno.serve(handle(async (req) => {
   let applied = 0;
   if (updates.length) {
     const { data, error: upErr } = await db.rpc("apply_tracking_updates", { p_updates: updates, p_events: events });
-    if (upErr) throw new Error(`Saving tracking failed: ${upErr.message}`);
+    if (upErr) {
+      const msg = `Saving tracking failed: ${upErr.message}`;
+      await db.from("sync_runs").update({ finished_at: new Date().toISOString(), status: "error", error: msg }).eq("id", run?.id);
+      throw new Error(msg);
+    }
     applied = data ?? 0;
   }
   await db.rpc("refresh_alerts");

@@ -577,3 +577,20 @@ begin
   end if;
 end
 $do$;
+
+-- Couriers sometimes repeat an identical history entry; de-duplicate before the event upsert
+do $do$
+declare d text := pg_get_functiondef('public.apply_tracking_updates(jsonb,jsonb)'::regprocedure);
+begin
+  if position('select distinct on (e.shipment_id, e.status_raw, e.event_at)' in d) = 0 then
+    d := replace(d,
+      $x$  select e.shipment_id, e.status, e.status_raw, e.event_at, 'courier'
+  from jsonb_to_recordset$x$,
+      $x$  -- couriers sometimes repeat an identical history entry; one row per key or the upsert fails
+  select distinct on (e.shipment_id, e.status_raw, e.event_at) e.shipment_id, e.status, e.status_raw, e.event_at, 'courier'
+  from jsonb_to_recordset$x$);
+    if position('distinct on (e.shipment_id' in d) = 0 then raise exception 'apply_tracking_updates patch did not apply'; end if;
+    execute d;
+  end if;
+end
+$do$;
