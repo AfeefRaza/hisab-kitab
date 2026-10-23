@@ -558,3 +558,22 @@ grant execute on function public.upsert_courier_parcels(text, jsonb) to service_
 grant execute on function public.cancel_unpicked_shipments(text[]) to service_role;
 
 select public.reconcile_all_stores();
+
+-- Parcels whose reference is an order number we don't have are unsynced Shopify orders
+-- (older than Shopify's 60-day window without read_all_orders), not extra parcels
+do $do$
+declare d text := pg_get_functiondef('public.finance_summary(date,date)'::regprocedure);
+begin
+  if position('unsynced Shopify order' in d) = 0 then
+    d := replace(d, $x$  where s.order_id is null and coalesce(b.statement_date, b.imported_at::date) between p_from and p_to;$x$,
+      $x$  where s.order_id is null and coalesce(b.statement_date, b.imported_at::date) between p_from and p_to
+    -- a reference that looks like an order number we don't have is an unsynced Shopify order
+    -- (e.g. older than Shopify's 60-day window), not an extra parcel: its revenue is missing too
+    and not (coalesce(s.courier_order_ref, '') ~* '^\s*#?[a-z]+\d{3,}\s*$'
+             and not exists (select 1 from public.orders o where o.store_id = s.store_id
+                             and lower(o.name) = '#' || ltrim(lower(trim(s.courier_order_ref)), '#')));$x$);
+    if position('unsynced Shopify order' in d) = 0 then raise exception 'finance_summary patch did not apply'; end if;
+    execute d;
+  end if;
+end
+$do$;
