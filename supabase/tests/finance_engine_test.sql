@@ -46,6 +46,11 @@ insert into public.orders (id, name, created_at_shop, updated_at_shop, cancelled
   (9000006, '#T6', '2020-01-07 15:00+05', now(), null, true, 2600, 2600, 'Karachi'),
   (9000007, '#T7', '2020-01-08 09:00+05', now(), null, true, 1800, 1800, 'Quetta'),
   (9000008, '#T8', '2020-01-08 10:00+05', now(), null, true, 2200, 2200, 'Lahore');
+-- Tags: cancelled / not confirmed before dispatch; a cancelled tag on a delivered parcel is ignored
+insert into public.orders (id, name, created_at_shop, updated_at_shop, is_cod, current_total, total_price, city, tags, financial_status) values
+  (9000009, '#T9', '2020-01-09 10:00+05', now(), true, 1500, 1500, 'Lahore', '{"❌ Order Cancelled"}', 'PENDING'),
+  (9000010, '#T10', '2020-01-09 11:00+05', now(), true, 1700, 1700, 'Lahore', '{"Not Confirmed"}', 'PENDING'),
+  (9000011, '#T11', '2020-01-09 12:00+05', now(), true, 1900, 1900, 'Lahore', '{"notconfirmeddispatched"}', 'PENDING');
 
 insert into public.order_lines (id, order_id, title, quantity, current_quantity, unit_price, unit_cost) values
   (1, 9000001, 'Black Hoodie', 1, 1, 3000, 1000),
@@ -225,6 +230,18 @@ declare st text;
 begin
   select money_state into st from public.v_order_profit where order_id = 9000008;
   if st <> 'cancelled' then raise exception 'FAIL O8 should be cancelled after Shopify cancellation, got %', st; end if;
+end $$;
+
+-- Pre-dispatch cancellations from tags
+do $$
+declare st text; e numeric;
+begin
+  select money_state, expected_cod into st, e from public.v_order_finance where order_id = 9000009;
+  if st <> 'cancelled' or e <> 0 then raise exception 'FAIL T9 cancelled tag: %, expected COD %', st, e; end if;
+  select money_state, expected_cod into st, e from public.v_order_finance where order_id = 9000010;
+  if st <> 'not_confirmed' or e <> 0 then raise exception 'FAIL T10 not confirmed tag: %, expected COD %', st, e; end if;
+  select money_state into st from public.v_order_finance where order_id = 9000011;
+  if st <> 'unfulfilled' then raise exception 'FAIL T11 "notconfirmeddispatched" is not a pre-dispatch cancel, got %', st; end if;
 end $$;
 
 select 'ALL FINANCE TESTS PASSED' as result;

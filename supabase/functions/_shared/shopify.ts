@@ -158,11 +158,13 @@ const gidNum = (v: string | null | undefined): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-export function isCodOrder(gateways: string[], financialStatus: string | null): boolean {
-  const g = gateways.map((x) => x.toLowerCase());
-  if (g.some((x) => x.includes("cash on delivery") || x.includes("cod") || x === "manual")) return true;
-  if (g.length === 0) return (financialStatus ?? "").toUpperCase() !== "PAID";
-  return false;
+/**
+ * Prepaid = Shopify says the order is paid (online payment, or a bank transfer the team
+ * confirmed from the customer's receipt and marked paid). "Payment pending" is collected
+ * on delivery whatever the payment method is called.
+ */
+export function isCodOrder(_gateways: string[], financialStatus: string | null): boolean {
+  return !["PAID", "PARTIALLY_REFUNDED", "REFUNDED"].includes((financialStatus ?? "").toUpperCase());
 }
 
 export interface MappedOrder {

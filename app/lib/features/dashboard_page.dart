@@ -106,6 +106,16 @@ class DashboardPage extends StatelessWidget {
                 onTap: () => context.go('/orders?state=returned'),
               ),
               KpiCard(
+                label: 'Cancelled / not confirmed',
+                value: count(toNum(states['cancelled']?['orders']) + toNum(states['not_confirmed']?['orders'])),
+                hint: '${pct(toNum(pnl['orders']) == 0 ? null : (toNum(states['cancelled']?['orders']) + toNum(states['not_confirmed']?['orders'])) / toNum(pnl['orders']) * 100)} of orders, never dispatched · '
+                    '${count(states['cancelled']?['orders'])} cancelled, ${count(states['not_confirmed']?['orders'])} not confirmed · '
+                    '${rs(toNum(states['cancelled']?['amount']) + toNum(states['not_confirmed']?['amount']))}',
+                icon: Icons.block,
+                color: MoneyState.cancelled.color,
+                onTap: () => context.go('/orders?state=cancelled'),
+              ),
+              KpiCard(
                 label: 'Ad spend',
                 value: rs(pnl['marketing']),
                 hint: _adHint(s, pnl),

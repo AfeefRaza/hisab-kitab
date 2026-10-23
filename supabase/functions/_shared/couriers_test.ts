@@ -134,6 +134,11 @@ Deno.test("isCodOrder", () => {
   assertEquals(isCodOrder(["shopify_payments"], "PAID"), false);
   assertEquals(isCodOrder([], "PENDING"), true);
   assertEquals(isCodOrder([], "PAID"), false);
+  // Prepaid follows Shopify's payment status, not the payment method name
+  assertEquals(isCodOrder(["Bank Deposit"], "PENDING"), true);
+  assertEquals(isCodOrder(["Bank Deposit"], "PAID"), false);
+  assertEquals(isCodOrder(["Cash on Delivery (COD)"], "PAID"), false);
+  assertEquals(isCodOrder(["Cash on Delivery (COD)"], "PARTIALLY_PAID"), true);
 });
 
 Deno.test("mapOrder: money, lines, all tracking numbers, cancelled fulfilments skipped", () => {

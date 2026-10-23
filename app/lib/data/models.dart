@@ -8,11 +8,12 @@ enum MoneyState {
   withCourier('With courier', 'Delivered — cash collected, courier has not settled it', Color(0xFFD97706), Icons.account_balance_wallet_outlined),
   settledUnbanked('Settled, not in bank', 'In a courier statement, deposit not matched in bank yet', Color(0xFFEA580C), Icons.receipt_long_outlined),
   inBank('In bank', 'Settled and matched to a bank deposit', Color(0xFF16A34A), Icons.account_balance_outlined),
-  prepaid('Prepaid', 'Paid online through a payment gateway', Color(0xFF0D9488), Icons.credit_card),
+  prepaid('Prepaid', 'Shopify shows it paid (online, or bank transfer marked paid)', Color(0xFF0D9488), Icons.credit_card),
   returning('Returning', 'Return in transit back to us', Color(0xFFDB2777), Icons.u_turn_left),
   returned('Returned', 'Back with us — no revenue, shipping lost', Color(0xFFDC2626), Icons.assignment_return_outlined),
   lost('Lost', 'Lost by courier — claim needed', Color(0xFF7C3AED), Icons.report_outlined),
-  cancelled('Cancelled', 'Cancelled before delivery', Color(0xFF9CA3AF), Icons.block);
+  cancelled('Cancelled', 'Cancelled before dispatch (Shopify, "Cancelled" tag, or label cancelled)', Color(0xFF9CA3AF), Icons.block),
+  notConfirmed('Not confirmed', 'Customer never confirmed ("Not Confirmed" tag) — not dispatched', Color(0xFFA8A29E), Icons.phone_disabled_outlined);
 
   const MoneyState(this.label, this.description, this.color, this.icon);
   final String label;
@@ -25,6 +26,7 @@ enum MoneyState {
         MoneyState.withCourier => 'with_courier',
         MoneyState.settledUnbanked => 'settled_unbanked',
         MoneyState.inBank => 'in_bank',
+        MoneyState.notConfirmed => 'not_confirmed',
         _ => name,
       };
 
@@ -37,7 +39,7 @@ enum MoneyState {
 
   /// Order the money flows in, for the "Where is our money?" view.
   static const flow = [
-    unfulfilled, booked, inTransit, withCourier, settledUnbanked, inBank, prepaid, returning, returned, lost, cancelled,
+    unfulfilled, booked, inTransit, withCourier, settledUnbanked, inBank, prepaid, returning, returned, lost, cancelled, notConfirmed,
   ];
 }
 
