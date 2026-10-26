@@ -43,6 +43,45 @@ enum MoneyState {
   ];
 }
 
+/// Bank transaction categories (bank_transactions.category). [dir]: 'in', 'out' or 'both'.
+class BankCategory {
+  const BankCategory(this.key, this.label, this.icon, this.color, this.dir);
+  final String key;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final String dir;
+
+  static const all = [
+    BankCategory('courier_settlement', 'PostEx / courier COD', Icons.local_shipping_outlined, Color(0xFF16A34A), 'in'),
+    BankCategory('customer_payment', 'Customer transfer (prepaid order)', Icons.person_outline, Color(0xFF0D9488), 'in'),
+    BankCategory('meta_ads', 'Meta / Facebook ads', Icons.campaign_outlined, Color(0xFF2563EB), 'out'),
+    BankCategory('other_ads', 'Other ads (Google, TikTok…)', Icons.ads_click, Color(0xFF3B82F6), 'out'),
+    BankCategory('supplier', 'Supplier', Icons.factory_outlined, Color(0xFF9333EA), 'out'),
+    BankCategory('dtf_printing', 'DTF printing', Icons.print_outlined, Color(0xFFA855F7), 'out'),
+    BankCategory('inventory', 'Inventory / production', Icons.inventory_2_outlined, Color(0xFF7C3AED), 'out'),
+    BankCategory('shopify_apps', 'Shopify & apps', Icons.apps, Color(0xFF0EA5E9), 'out'),
+    BankCategory('salaries', 'Salaries', Icons.badge_outlined, Color(0xFFEA580C), 'out'),
+    BankCategory('operational', 'Operational (rent, bills…)', Icons.home_work_outlined, Color(0xFFD97706), 'out'),
+    BankCategory('taxes', 'Taxes', Icons.account_balance_outlined, Color(0xFFB45309), 'out'),
+    BankCategory('bank_charges', 'Bank charges', Icons.receipt_outlined, Color(0xFF94A3B8), 'out'),
+    BankCategory('owner_transfer', 'Own account / owner', Icons.swap_horiz, Color(0xFF64748B), 'both'),
+    BankCategory('loan', 'Loan', Icons.handshake_outlined, Color(0xFF78716C), 'both'),
+    BankCategory('refund', 'Refund / reversal', Icons.undo, Color(0xFFDB2777), 'both'),
+    BankCategory('other_income', 'Other income', Icons.add_circle_outline, Color(0xFF22C55E), 'in'),
+    BankCategory('other_expense', 'Other expense', Icons.remove_circle_outline, Color(0xFFEF4444), 'out'),
+  ];
+
+  static BankCategory? of(String? key) {
+    for (final c in all) {
+      if (c.key == key) return c;
+    }
+    return null;
+  }
+
+  static String labelOf(String? key) => key == null || key == 'needs_review' ? 'Needs review' : (of(key)?.label ?? key);
+}
+
 const shipmentStatuses = <String, String>{
   'booked': 'Booked',
   'in_transit': 'In transit',

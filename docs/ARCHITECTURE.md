@@ -84,6 +84,27 @@ as "Courier charges, parcels outside Shopify". Labels still "At <merchant> Wareh
 *booked*; labels on fulfilments cancelled in Shopify are auto-cancelled until the courier
 shows movement.
 
+## Bank reconciliation
+
+* **Import:** PDF statements are read by the `parse-bank-pdf` function (positioned text →
+  rows; Meezan layout and any statement with Date/Description/Credit/Debit/Balance
+  columns). Every row is checked against the running balance; only the account's last 4
+  digits are stored. CSV / Excel exports use the column mapper.
+* **Understanding:** `bank_parse_description` extracts counterparty, masked account,
+  channel and STAN; fee rows are paired with their transfer (same STAN).
+* **Categories:** manual > saved rule (`bank_rules`, by account / name / text) > automatic
+  pattern. Transfers to the statement's account holder are own-account transfers.
+  Courier accounts are learned automatically when a deposit matches a CPR.
+* **Matching** (`bank_run_matching`, after every import): deposits ↔ CPRs (one-to-one,
+  then one deposit paying 2–4 CPRs, with a rounding tolerance; partial payments
+  manually), customer transfers ↔ orders marked paid (`bank_order_matches`), debits ↔
+  recorded expenses (`expenses.bank_transaction_id`).
+* **Analysis** (`bank_reconciliation(from, to)`): per area — courier payouts, prepaid
+  orders, Meta and other ads, suppliers, DTF, inventory, apps, salaries, operational,
+  taxes — expected (Hisab Kitab) → actual (bank) → matched → difference, with the
+  unmatched items, an explanation and the action. Only dates the statements cover are
+  compared. Also: unexplained transactions, possible duplicates, statement gaps.
+
 A deposit is reported **missing** only when imported bank statements cover the payout's
 arrival window; otherwise the payout is **unverified** (one "Bank data missing" alert).
 

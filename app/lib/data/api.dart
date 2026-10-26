@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/format.dart';
@@ -229,23 +232,76 @@ class Api {
     }
   }
 
-  Future<Rec> importBankStatement(int accountId, String fileName, String sha256, List<Map<String, dynamic>> rows) async =>
+  Future<Rec> importBankStatement(int accountId, String fileName, String sha256, List<Map<String, dynamic>> rows, {Rec? meta}) async =>
       (await _db.rpc('import_bank_statement', params: {
         'p_account_id': accountId,
         'p_file_name': fileName,
         'p_file_sha256': sha256,
         'p_rows': rows,
+        'p_meta': meta,
       })) as Rec;
 
-  Future<List<Rec>> bankTransactions({int? accountId, String? filter, DateTime? from, DateTime? to}) async {
-    var q = _db.from('bank_transactions').select('*, settlement_bank_matches(id,batch_id,amount,method), expenses(id)');
+  /// Reads a bank statement PDF on the server (nothing is stored) → {header, rows, warnings, balance_check}.
+  Future<Rec> parseBankPdf(Uint8List bytes) async {
+    final res = await _db.functions.invoke('parse-bank-pdf', body: {'pdf_base64': base64Encode(bytes)});
+    final data = res.data as Rec;
+    if (data['error'] != null) throw Exception(data['error']);
+    return data;
+  }
+
+  Future<List<Rec>> bankTransactions({int? accountId, String? filter, String? category, DateTime? from, DateTime? to}) async {
+    var q = _db.from('bank_transactions').select(
+        '*, settlement_bank_matches(id,batch_id,amount,method), expenses(id), bank_order_matches(id,order_id,amount,orders(name))');
     if (accountId != null) q = q.eq('account_id', accountId);
     if (from != null) q = q.gte('txn_date', ymd(from));
     if (to != null) q = q.lte('txn_date', ymd(to));
     if (filter == 'credits') q = q.gt('credit', 0);
     if (filter == 'debits') q = q.gt('debit', 0);
+    if (category == 'needs_review') {
+      q = q.isFilter('category', null);
+    } else if (category != null) {
+      q = q.eq('category', category);
+    }
     return _rows(await q.order('txn_date', ascending: false).order('id', ascending: false).limit(1000));
   }
+
+  /// Expected vs actual per area (courier, prepaid orders, ads, suppliers…) for a period.
+  Future<Rec> bankReconciliation(DateTime from, DateTime to) async =>
+      (await _db.rpc('bank_reconciliation', params: {'p_from': ymd(from), 'p_to': ymd(to)})) as Rec;
+
+  /// Manual category; [rule] = 'account' | 'name' saves it for every past and future transaction.
+  Future<Rec> setBankCategory(int txnId, String? category, {String? rule, String? note}) async =>
+      (await _db.rpc('set_bank_category', params: {'p_txn': txnId, 'p_category': category ?? '', 'p_rule': rule, 'p_note': note})) as Rec;
+
+  Future<Rec> runBankMatching() async => (await _db.rpc('bank_run_matching')) as Rec;
+
+  Future<List<Rec>> bankRules() async => _rows(await _db.from('bank_rules').select().order('created_at', ascending: false));
+
+  Future<void> deleteBankRule(int id) async {
+    await _db.from('bank_rules').delete().eq('id', id);
+    await runBankMatching();
+  }
+
+  /// Link a customer transfer to a Shopify order by its name (e.g. #haven34027).
+  Future<void> linkBankOrder(int txnId, String orderName, double amount) async {
+    final name = orderName.trim().startsWith('#') ? orderName.trim() : '#${orderName.trim()}';
+    final o = await _db.from('orders').select('id').ilike('name', name).maybeSingle();
+    if (o == null) throw Exception('Order $name not found');
+    await _db.from('bank_order_matches').insert({
+      'bank_transaction_id': txnId, 'order_id': o['id'], 'amount': amount, 'method': 'manual', 'matched_by': _db.auth.currentUser?.id,
+    });
+    await setBankCategory(txnId, 'customer_payment');
+  }
+
+  Future<void> unlinkBankOrder(int matchId) => _db.from('bank_order_matches').delete().eq('id', matchId);
+
+  Future<Rec?> bankTransaction(int id) async => await _db
+      .from('bank_transactions')
+      .select('*, settlement_bank_matches(id,batch_id,amount,method), expenses(id), bank_order_matches(id,order_id,amount,orders(name))')
+      .eq('id', id)
+      .maybeSingle();
+
+  Future<int> createBankAccount(Rec data) async => (await _db.from('bank_accounts').insert(data).select('id').single())['id'] as int;
 
   Future<void> updateBankTxn(int id, {String? category, String? note}) =>
       _db.from('bank_transactions').update({'category': category, 'note': note}).eq('id', id);
