@@ -42,5 +42,37 @@ begin
     raise exception 'FAIL account rule did not categorise the other payment: %', r; end if;
 end $$;
 
+-- Overlapping statements: a 1-month file, then a longer file containing the same rows laid out
+-- differently (wrapped hyphens, spacing, case) plus new ones → only the new rows are added
+do $$
+declare acc bigint; r jsonb;
+begin
+  insert into public.bank_accounts (name, bank) values ('Overlap Test', 'Meezan Bank') returning id into acc;
+  perform public.import_bank_statement(acc, 'month.pdf', 'sha-month',
+    '[{"date":"2020-03-02","description":"Money Received from XXXX9545 - STAN(4444)","credit":5000,"balance":5000},
+      {"date":"2020-03-03","description":"Money Transferred to ALI-XXXXCASH STAN(5555)","debit":500,"balance":4500}]'::jsonb,
+    '{"account_last4":"7777"}'::jsonb);
+  r := public.import_bank_statement(acc, 'year.pdf', 'sha-year',
+    '[{"date":"2020-03-01","description":"Money Received from NEW CUSTOMER STAN(3333)","credit":100,"balance":0},
+      {"date":"2020-03-02","description":"MONEY RECEIVED FROM  XXXX9545 -  STAN(4444)","credit":5000,"balance":5000},
+      {"date":"2020-03-03","description":"Money Transferred to ALI- XXXXCASH STAN(5555)","debit":500,"balance":4500},
+      {"date":"2020-03-04","description":"Money Transferred to ALI-XXXXCASH STAN(6666)","debit":500,"balance":4000}]'::jsonb,
+    '{"account_last4":"7777"}'::jsonb);
+  if (r ->> 'inserted')::int <> 2 or (r ->> 'duplicates_skipped')::int <> 2 then
+    raise exception 'FAIL overlap: %', r; end if;
+  if (select count(*) from public.bank_transactions where account_id = acc) <> 4 then
+    raise exception 'FAIL overlap: transactions counted twice'; end if;
+
+  -- the same statement filed under another account is refused
+  insert into public.bank_accounts (name) values ('Accidental copy') returning id into acc;
+  begin
+    perform public.import_bank_statement(acc, 'again.pdf', 'sha-again',
+      '[{"date":"2020-03-02","description":"x","credit":5000,"balance":5000}]'::jsonb, '{"account_last4":"7777"}'::jsonb);
+    raise exception 'FAIL: statement accepted into a second account';
+  exception when others then
+    if sqlerrm like 'FAIL%' then raise; end if;
+  end;
+end $$;
+
 select 'BANK TESTS PASSED' as result;
 rollback;
